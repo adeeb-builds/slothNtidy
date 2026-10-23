@@ -1,0 +1,71 @@
+[
+  {
+    "saved_name": "2026-10-23_dbms_indexing_optimization.pdf",
+    "orig_name": "dbms_pdf1.pdf",
+    "category": "Notes",
+    "path": "./SlothVault\\Notes\\2026-10-23_dbms_indexing_optimization.pdf",
+    "pages": 2,
+    "chars": 3860,
+    "key_points": [
+      "Explains the concept and importance of indexing in DBMS, including types of indexes and their characteristics.",
+      "Describes B+ tree and hash index structures and their use cases.",
+      "Discusses cost-based and heuristic optimization techniques in query processing.",
+      "Outlines join algorithms and provides practical tips for optimizing database performance."
+    ],
+    "action_items": [],
+    "deleted_history": null
+  },
+  {
+    "saved_name": "2026-10-23_dbms_transactions_concurrency.pdf",
+    "orig_name": "dbms_pdf3.pdf",
+    "category": "Notes",
+    "path": "./SlothVault\\Notes\\2026-10-23_dbms_transactions_concurrency.pdf",
+    "pages": 3,
+    "chars": 5841,
+    "key_points": [
+      "Explains the concept of transactions and their states (Active, Partially committed, Committed, Failed, Aborted)",
+      "Discusses problems of uncontrolled concurrency including Dirty read, Lost update, Unrepeatable read, and Phantom read",
+      "Describes the ACID properties: Atomicity, Consistency, Isolation, Durability",
+      "Introduces serializability, conflict serializability, and view serializability with the precedence graph test",
+      "Details lock-based protocols like Two-Phase Locking (2PL) and its strict variant",
+      "Outlines SQL isolation levels and their impact on transaction isolation",
+      "Describes deadlock and its detection through the wait-for graph"
+    ],
+    "action_items": [],
+    "deleted_history": {
+      "deleted_name": "dbms_pdf4.pdf",
+      "deleted_pages": 2,
+      "deleted_chars": 3603,
+      "differences": [
+        "Includes detailed explanations on deadlock detection and prevention, such as wait-for graph, prevention methods, and timeout mechanisms.",
+        "Expands on concurrency control with timestamp ordering, where each transaction has a unique timestamp, and operations violating timestamp order are rolled back.",
+        "Provides comprehensive information on recovery from failure, including log records, write-ahead logging, undo, redo, and checkpoint mechanisms.",
+        "Discusses deferred vs. immediate update techniques and introduces shadow paging as an alternative to logging."
+      ]
+    }
+  },
+  {
+    "saved_name": "2026-10-23_dbms_normalization.pdf",
+    "orig_name": "dbms_pdf5.pdf",
+    "category": "Notes",
+    "path": "./SlothVault\\Notes\\2026-10-23_dbms_normalization.pdf",
+    "pages": 3,
+    "chars": 5245,
+    "key_points": [
+      "Explains normalization to avoid data redundancy and update anomalies in database design",
+      "Describes functional dependencies, Armstrong's axioms, and attribute closure",
+      "Details the steps from 1NF to BCNF, including first, second, third normal forms, and Boyce-Codd normal form",
+      "Discusses decomposition principles for lossless join and dependency preservation"
+    ],
+    "action_items": [],
+    "deleted_history": {
+      "deleted_name": "dbms_pdf2.pdf",
+      "deleted_pages": 2,
+      "deleted_chars": 3275,
+      "differences": [
+        "Includes detailed sections on decomposition, worked examples, beyond BCNF (multivalued dependencies, 4NF, 5NF), and when to denormalize.",
+        "Provides specific examples and conditions for normalization and denormalization strategies."
+      ]
+    }
+  }
+]
