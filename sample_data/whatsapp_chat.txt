@@ -1,0 +1,4 @@
+[19:02] CR_Official: Fee_Circular_Oct.pdf (file attached)
+[21:14] Rohan: dbms_pdf3.pdf (file attached)
+[21:15] Rohan: "Deadlock notes, recovery skipped"
+[21:40] Aman: dbms_pdf4.pdf (file attached)

@@ -1,0 +1,36 @@
+[
+    {
+        "subject": "DBMS",
+        "unit": 3,
+        "topic": "Indexing and Optimization",
+        "subtopics": [
+            "B+ trees",
+            "hash indexes",
+            "query optimization",
+            "join algorithms"
+        ]
+    },
+    {
+        "subject": "DBMS",
+        "unit": 4,
+        "topic": "Transactions and Concurrency",
+        "subtopics": [
+            "ACID properties",
+            "two-phase locking",
+            "deadlock",
+            "serializability",
+            "recovery"
+        ]
+    },
+    {
+        "subject": "DBMS",
+        "unit": 5,
+        "topic": "Normalization",
+        "subtopics": [
+            "functional dependency",
+            "1NF 2NF 3NF BCNF",
+            "lossless join",
+            "denormalization"
+        ]
+    }
+]
