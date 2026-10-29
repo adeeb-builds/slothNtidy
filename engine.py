@@ -2,27 +2,40 @@ import json
 import requests
 
 class SlothEngine:
-    """Handles offline, zero-cost inference via a local Ollama instance."""
-    
-    def __init__(self, model: str = "qwen2.5:7b", host: str = "http://localhost:11434"):
+    def __init__(self, model="qwen2.5:7b", host="http://localhost:11434"):
         self.model = model
         self.api_url = f"{host}/api/generate"
+        self.embed_url = f"{host}/api/embeddings"
 
-    def ask_json(self, system_prompt: str, user_content: str) -> dict:
+    def generate(self, prompt: str, system_prompt: str = "", json_mode: bool = True) -> str:
+        """Sends prompt to local Ollama instance and returns the text response."""
         payload = {
             "model": self.model,
-            "system": system_prompt,
-            "prompt": user_content,
-            "format": "json",
+            "prompt": prompt,
             "stream": False,
             "options": {
                 "temperature": 0.2,
-                "num_ctx": 2048  # Speeds up local inference significantly
+                "num_ctx": 2048
             }
         }
+        if system_prompt:
+            payload["system"] = system_prompt
+        if json_mode:
+            payload["format"] = "json"
+
         response = requests.post(self.api_url, json=payload, timeout=300)
         response.raise_for_status()
-        return json.loads(response.json()["response"])
+        return response.json().get("response", "")
+
+    def embed(self, text: str) -> list:
+        """Local embeddings via Ollama - used by the syllabus matcher."""
+        response = requests.post(
+            self.embed_url,
+            json={"model": "nomic-embed-text", "prompt": text[:2000]},
+            timeout=120,
+        )
+        response.raise_for_status()
+        return response.json()["embedding"]
 
 # Optional quick test if you run `python engine.py` directly:
 if __name__ == "__main__":
