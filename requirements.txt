@@ -1,6 +1,15 @@
-pymupdf>=1.24
-requests>=2.31
-Pillow>=10.0
-ImageHash>=4.3
-pytesseract>=0.3.10   # optional: OCR for scans, needs tesseract binary installed
+# Core pipeline
+pymupdf>=1.24          # read PDFs, render pages, merge topic PDFs
+Pillow>=10.0           # photos of notes
+ImageHash>=4.3         # pHash: catches the same page photographed twice
+pytesseract>=0.3.10    # OCR for photos/scans (needs the Tesseract program - setup installs it)
+requests>=2.31         # only used to talk to a local Ollama, if you have one
+
+# App (the UI)
+streamlit>=1.45,<2
+
+# Local AI matching (MiniLM). setup.bat installs the small CPU-only build of torch first.
+sentence-transformers>=3.0
+
+# Tests
 pytest>=8.0

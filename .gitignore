@@ -17,3 +17,7 @@ TopicPDFs/
 # OS-specific files
 .DS_Store
 Thumbs.db
+# slothNtidy v2: generated results and your own WhatsApp exports (never commit real chats -
+# they contain classmates' names and phone numbers)
+output/
+inbox/
