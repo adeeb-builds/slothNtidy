@@ -1,4 +1,19 @@
-.venv/
+# Python bytecode & cache
 __pycache__/
 *.py[cod]
-.env
+*$py.class
+.pytest_cache/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Local Pipeline Inputs & Generated Outputs (Do not commit user data or vaults)
+Downloaded_PDFs/
+SlothVault/
+TopicPDFs/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
