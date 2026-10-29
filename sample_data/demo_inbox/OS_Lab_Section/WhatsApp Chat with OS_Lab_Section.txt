@@ -1,0 +1,6 @@
+19/10/26, 7:02 pm - Priya: ‎CPU_scheduling_short.pdf (file attached)
+my notes from the lecture, shorter version
+24/10/26, 6:05 pm - Neha: ‎IMG-20261024-WA0007.jpg (file attached)
+disk scheduling + RAID handwritten notes
+25/10/26, 9:30 pm - Neha: ‎DOC-20261025-WA0052.pdf (file attached)
+25/10/26, 9:31 pm - Neha: dbms transactions, made these myself
