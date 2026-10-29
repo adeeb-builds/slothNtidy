@@ -20,6 +20,7 @@ from config import (DEMO_INBOX, INBOX_FOLDER, OUTPUT_FOLDER, REPORT_JSON, REPORT
 from embedder import load_embedder
 from parser import scan_inbox
 from pipeline import STAGES, assign_to_unit, mark_not_in_syllabus, restore_removed, run
+from mascot import sloth_with_bubble
 from syllabus import load_syllabus, load_syllabus_doc, save_syllabus_doc
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -50,6 +51,9 @@ def _css():
         _font_face("Space Grotesk", "space-grotesk-latin-700-normal.woff2", 700),
         _font_face("Space Mono", "space-mono-latin-400-normal.woff2", 400),
         _font_face("Space Mono", "space-mono-latin-700-normal.woff2", 700),
+        _font_face("Pixelify Sans", "pixelify-sans-latin-400-normal.woff2", 400),
+        _font_face("Pixelify Sans", "pixelify-sans-latin-600-normal.woff2", 600),
+        _font_face("Pixelify Sans", "pixelify-sans-latin-700-normal.woff2", 700),
     ])
     return faces + """
 :root{--green:#2E4741;--green2:#3B5A52;--coral:#E0675E;--red:#D23F2B;--redbg:#F8DCD6;--cream:#F2EFE6;
@@ -60,21 +64,26 @@ code,pre,.mono{font-family:'Space Mono',ui-monospace,monospace!important;}
 [data-testid="stSidebar"]{background:var(--green);}
 [data-testid="stSidebar"] *{color:#EDEAE0;}
 [data-testid="stSidebar"] .stRadio label p{font-size:15px;}
-[data-testid="stSidebar"] [role="radiogroup"] label{padding:6px 8px;border-radius:2px;}
+[data-testid="stSidebar"] [role="radiogroup"] label{padding:6px 8px;border-radius:0;}
+[data-testid="stSidebar"] [role="radiogroup"] label > div > div:first-child{border-radius:0!important;width:12px!important;height:12px!important;
+ border:2px solid #9FB5AE!important;background:transparent!important;}
+[data-testid="stSidebar"] [role="radiogroup"] label > div > div:first-child > div{display:none!important;}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) > div > div:first-child{background:var(--coral)!important;border-color:var(--coral)!important;}
+[data-testid="stSidebar"] hr{border:none!important;border-top:2px dashed var(--coral)!important;opacity:.85;}
 [data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked){background:rgba(255,255,255,.10);box-shadow:inset 3px 0 0 var(--coral);}
 .block-container{padding-top:2.2rem;max-width:1180px;}
 h1,h2,h3{font-family:'Space Grotesk',sans-serif!important;letter-spacing:-.02em;color:var(--ink);}
 .kicker{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#B9802A;font-weight:700;}
 .side-kicker{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.22em;color:var(--mustard)!important;font-weight:700;margin-top:.3rem;}
-.brand{font-size:26px;font-weight:700;line-height:1.05;margin:.2rem 0 .1rem;color:#F4F1E8!important;}
+.brand{font-family:'Pixelify Sans',monospace!important;font-size:28px;font-weight:700;line-height:1.05;margin:.2rem 0 .1rem;color:#F4F1E8!important;letter-spacing:.01em;}
 .brand span{color:var(--coral)!important;}
-.page-title{font-size:40px;font-weight:700;line-height:1.05;margin:.25rem 0 .4rem;color:var(--ink);letter-spacing:-.03em;}
+.page-title{font-family:'Pixelify Sans',monospace!important;font-size:44px;font-weight:700;line-height:1.05;margin:.25rem 0 .5rem;color:var(--ink);letter-spacing:.005em;}
 .page-title span{color:var(--red);}
 .lede{color:var(--muted);font-size:16px;max-width:760px;margin-bottom:1.2rem;}
 .card{background:var(--paper);border:1.5px solid var(--ink);box-shadow:6px 6px 0 var(--shadow);padding:18px 20px;margin:0 6px 18px 0;}
 .card.dark{background:var(--green);color:#EDEAE0;border-color:var(--green);}
 .card.dark *{color:#EDEAE0;}
-.note{background:var(--paper);border:1.5px solid var(--ink);padding:12px 16px;font-size:14px;color:var(--ink);box-shadow:5px 5px 0 var(--shadow);margin:10px 6px 18px 0;}
+.note{background:var(--paper);border:2px dashed var(--ink);padding:12px 16px;font-size:14px;color:var(--ink);box-shadow:5px 5px 0 var(--shadow);margin:10px 6px 18px 0;}
 .note .kicker{display:block;margin-bottom:4px;}
 .stats{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin:4px 6px 22px 0;}
 .stat{background:var(--paper);border:1.5px solid var(--ink);padding:12px 14px;box-shadow:4px 4px 0 var(--shadow);}
@@ -106,24 +115,43 @@ h1,h2,h3{font-family:'Space Grotesk',sans-serif!important;letter-spacing:-.02em;
 .chat .ts{color:#9FB5AE;} .chat .who{color:#F4C36B;} .chat .cap{color:#F4F1E8;}
 .chat .cov{color:#8FD6A6;font-weight:700;} .chat .nc{color:#FF8C7A;font-weight:700;} .chat .rv{color:#9DBBF0;font-weight:700;}
 .chat hr{border:none;border-top:1px dashed #5E7A72;margin:10px 0;}
-.how{font-family:'Space Mono',monospace;font-size:12.5px;background:var(--paper);border:1.5px solid var(--ink);padding:12px 16px;margin:16px 6px 16px 0;}
+.how{font-family:'Space Mono',monospace;font-size:12.5px;background:var(--paper);border:2px dashed var(--ink);padding:12px 16px;margin:16px 6px 16px 0;}
 .how b{color:var(--red);}
 .tag{display:inline-block;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.06em;padding:2px 8px;border:1.3px solid var(--ink);margin:0 6px 4px 0;background:#fff;}
 .tag.red{background:var(--redbg);color:var(--red);border-color:var(--red);}
 .tag.blue{background:#E2EAF7;color:var(--blue);border-color:var(--blue);}
 .tag.ok{background:#E0EFE6;color:var(--ok);border-color:var(--ok);}
 .stagebar{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin:8px 6px 16px 0;}
-.stage{border:1.5px solid var(--ink);padding:10px 8px;background:var(--paper);font-size:13px;font-weight:600;}
-.stage .s{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:var(--muted);display:block;}
+.stage{border:2px dashed var(--ink);padding:10px 8px;background:var(--paper);font-size:13px;font-weight:600;}
+.stage .s{font-family:'Pixelify Sans',monospace;font-size:13px;letter-spacing:.06em;color:var(--muted);display:block;}
+.stage.done,.stage.now{border-style:solid;}
 .stage.done{background:var(--green);color:#F4F1E8;} .stage.done .s{color:var(--mustard);}
 .stage.now{background:var(--coral);color:#fff;} .stage.now .s{color:#fff;}
 .tree{font-family:'Space Mono',monospace;font-size:13px;background:var(--paper);border:1.5px solid var(--ink);padding:14px 18px;
  box-shadow:6px 6px 0 var(--shadow);line-height:1.7;white-space:pre;overflow-x:auto;margin-right:6px;}
 div.stButton>button,div.stDownloadButton>button{border-radius:0;border:1.5px solid var(--ink);font-weight:600;box-shadow:3px 3px 0 var(--shadow);}
-div.stButton>button[kind="primary"]{background:var(--coral);color:#fff;border-color:var(--ink);}
+div.stButton>button[kind="primary"]{background:var(--coral);color:#fff;border-color:var(--ink);outline:2px dashed rgba(255,255,255,.75);outline-offset:-6px;}
 div.stButton>button:hover,div.stDownloadButton>button:hover{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--shadow);}
 [data-testid="stExpander"]{border-radius:0;border:1.5px solid var(--ink);background:var(--paper);}
 [data-testid="stFileUploaderDropzone"]{border-radius:0;border:2px dashed var(--green);background:var(--paper);}
+.mascot{display:flex;align-items:center;gap:12px;margin:6px 0 4px;position:relative;}
+.mascot .sloth{flex:none;image-rendering:pixelated;}
+.mascot .sloth-working{animation:bob .5s steps(2) infinite;}
+.mascot .sloth-happy{animation:hop 1.6s steps(2) infinite;}
+@keyframes bob{50%{transform:translateY(-3px);}}
+@keyframes hop{0%,70%{transform:none;}85%{transform:translateY(-4px);}}
+.bubble{position:relative;background:#fff;color:var(--ink)!important;border:2px dashed var(--ink);font-family:'Space Mono',monospace;
+ font-size:11.5px;line-height:1.45;padding:8px 10px;letter-spacing:.02em;}
+.bubble *{color:var(--ink)!important;}
+.bubble::before{content:"";position:absolute;left:-9px;top:50%;width:10px;height:10px;background:#fff;
+ border-left:2px dashed var(--ink);border-bottom:2px dashed var(--ink);transform:translateY(-50%) rotate(45deg);}
+[data-testid="stSidebar"] .bubble{background:#F4F1E8;border-color:#F4F1E8;}
+[data-testid="stSidebar"] .bubble::before{background:#F4F1E8;border-color:#F4F1E8;}
+.zz{position:absolute;left:62px;top:-6px;font-family:'Pixelify Sans',monospace;color:var(--mustard)!important;font-size:13px;
+ animation:zz 2s steps(3) infinite;}
+.zz b{font-size:16px;color:var(--mustard)!important;} .zz i{font-size:19px;font-style:normal;color:var(--mustard)!important;}
+@keyframes zz{0%{opacity:.3;}50%{opacity:1;}100%{opacity:.3;}}
+.hero-mascot{border:2px dashed var(--ink);background:var(--paper);padding:14px 18px;margin:0 6px 18px 0;box-shadow:5px 5px 0 var(--shadow);}
 @media (max-width:900px){.stats{grid-template-columns:repeat(2,1fr);}.thead{display:none;}.stagebar{grid-template-columns:repeat(4,1fr);}
  .funnel-row{grid-template-columns:1fr;}}
 """
@@ -248,6 +276,14 @@ with st.sidebar:
     st.markdown('<div class="side-kicker">HACKTOBERFEST [26] // BFIT</div>'
                 '<div class="brand">slothNtidy<br><span>Notes Sorter.</span></div>', unsafe_allow_html=True)
     st.caption("WhatsApp chaos → syllabus-mapped exam notes")
+    if R:
+        _miss = sum(u["status"] == "MISSING" for u in R["units"])
+        _msg = (f"Sorted {R['counts']['kept']} notes! {_miss} unit{'s' if _miss != 1 else ''} still missing."
+                if _miss else f"Sorted {R['counts']['kept']} notes. Every unit has notes!")
+        st.markdown(sloth_with_bubble("happy", _msg, px=4), unsafe_allow_html=True)
+    else:
+        st.markdown(sloth_with_bubble("sleeping", "Wake me up: drop your class groups in.", px=4),
+                    unsafe_allow_html=True)
     st.radio("Go to", PAGES, key="nav", label_visibility="collapsed")
     st.divider()
     st.markdown('<div class="side-kicker">LOCAL ENGINE</div>', unsafe_allow_html=True)
@@ -385,7 +421,8 @@ def stagebar(active=-1, done_upto=-1):
     cells = []
     for i, s in enumerate(STAGES):
         cls = "done" if i <= done_upto else ("now" if i == active else "")
-        cells.append(f'<div class="stage {cls}"><span class="s">STAGE 0{i + 1}</span>{s}</div>')
+        tag = "✓ CLEAR" if i <= done_upto else f"LEVEL {i + 1}"
+        cells.append(f'<div class="stage {cls}"><span class="s">{tag}</span>{s}</div>')
     return '<div class="stagebar">' + "".join(cells) + "</div>"
 
 
@@ -399,6 +436,10 @@ def page_sort():
     st.markdown(f'<div class="note"><span class="kicker">READY</span>{n} file(s) from {src} · '
                 f'syllabus with {len(load_syllabus())} units · '
                 f'engine: {esc(embedder.name if embedder else "keyword evidence only")}</div>', unsafe_allow_html=True)
+    buddy = st.empty()
+    buddy.markdown('<div class="hero-mascot">' + sloth_with_bubble(
+        "sleeping", f"Ready when you are. {n} file{'s' if n != 1 else ''} waiting - press <b>Sort my notes</b>.", px=7)
+        + "</div>", unsafe_allow_html=True)
     bar = st.empty()
     bar.markdown(stagebar(), unsafe_allow_html=True)
     if not st.button("Sort my notes", type="primary", disabled=n == 0):
@@ -414,6 +455,9 @@ def page_sort():
 
     def progress(i, name, done, total, msg):
         bar.markdown(stagebar(active=i, done_upto=i - 1), unsafe_allow_html=True)
+        buddy.markdown('<div class="hero-mascot">' + sloth_with_bubble(
+            "working", f"LEVEL {i + 1}/{len(STAGES)} · {esc(name)}<br>{esc(msg)[:70]}", px=7) + "</div>",
+            unsafe_allow_html=True)
         frac = (i + (done / total if total else 1)) / len(STAGES)
         prog.progress(min(frac, 1.0), text=f"Stage {i + 1} · {name}: {msg}")
 
@@ -427,6 +471,9 @@ def page_sort():
         log_box.code("\n".join(lines), language=None)
         return
     bar.markdown(stagebar(done_upto=len(STAGES) - 1), unsafe_allow_html=True)
+    buddy.markdown('<div class="hero-mascot">' + sloth_with_bubble(
+        "happy", f"ALL LEVELS CLEAR! {result['counts']['total']} files → {result['counts']['kept']} notes "
+                 f"in {result['seconds']} s. Opening your dashboard...", px=7) + "</div>", unsafe_allow_html=True)
     prog.progress(1.0, text=f"Done in {result['seconds']} s")
     log_box.code("\n".join(lines), language=None)
     st.session_state.result = result
