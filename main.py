@@ -1,43 +1,39 @@
-"""slothNtidy pipeline: import -> parse -> clean -> match -> report -> export.
-Drop PDFs into ./Downloaded_PDFs, then run:  python main.py"""
-import os
-from config import DOWNLOAD_FOLDER, CHAT_EXPORT_FILE
-from parser import extract_pdf, parse_whatsapp_captions
-from filters import clean
-from syllabus import load_syllabus
-from matcher import match
-from report import build_report
-from exporter import export_topics
-from engine import SlothEngine
+"""slothNtidy from the command line (the UI is app.py).
+
+    python main.py            # sort whatever is in ./inbox
+    python main.py --demo     # sort the ready-made demo (4 WhatsApp groups)
+"""
+import argparse
+
+from config import DEMO_INBOX, INBOX_FOLDER, SYLLABUS_FILE
+from embedder import load_embedder
+from pipeline import run
+
 
 def main():
-    os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
-    files = [os.path.join(DOWNLOAD_FOLDER, f) for f in sorted(os.listdir(DOWNLOAD_FOLDER))
-             if f.lower().endswith(".pdf")]
-    if not files:
-        print(f"slothNtidy: no PDFs in {DOWNLOAD_FOLDER}. Drop files there and rerun.")
+    ap = argparse.ArgumentParser(description="Sort WhatsApp study notes by syllabus.")
+    ap.add_argument("--demo", action="store_true", help="use the sample WhatsApp groups in sample_data/")
+    ap.add_argument("--inbox", default=None, help=f"folder to sort (default {INBOX_FOLDER})")
+    ap.add_argument("--syllabus", default=SYLLABUS_FILE)
+    ap.add_argument("--no-ai", action="store_true", help="keyword evidence only, skip the embedding model")
+    args = ap.parse_args()
+
+    inbox = args.inbox or (DEMO_INBOX if args.demo else INBOX_FOLDER)
+    print("slothNtidy - loading the local matching engine...")
+    embedder = None if args.no_ai else load_embedder()
+    try:
+        r = run(inbox, args.syllabus, embedder)
+    except FileNotFoundError as e:
+        print(f"\n{e}\nDrop WhatsApp exports or PDFs into that folder and run again.")
         return
+    c = r["counts"]
+    print(f"\n{c['total']} files in -> {c['circulars']} circulars, {c['exact_dups'] + c['near_dups']} "
+          f"duplicates removed -> {c['kept']} notes kept")
+    for u in r["units"]:
+        print(f"  {u['status']:<13} {u['subject_code']} U{u['unit']} {u['title']}"
+              + (f"  (missing: {', '.join(u['missing'])})" if u["missing"] else ""))
+    print("\nOpen output/SlothVault for your sorted notes and output/TopicPDFs for merged PDFs.")
 
-    chat_meta = parse_whatsapp_captions(CHAT_EXPORT_FILE) if os.path.exists(CHAT_EXPORT_FILE) else {}
-
-    print(f"\n[STAGE 1-2] IMPORT + PARSE: reading {len(files)} PDF(s)...")
-    docs = [extract_pdf(f, chat_meta) for f in files]
-
-    print("\n[STAGE 3] CLEAN: circulars, duplicates, noise...")
-    kept, counts = clean(docs)
-    print(f"   Summary: {counts['total']} in -> {counts['kept']} kept "
-          f"({counts['circulars']} circulars, {counts['exact_dups']} exact dups, "
-          f"{counts['near_dups']} near-dups removed, {counts['unreadable']} flagged)")
-
-    print("\n[STAGE 4] MATCH: mapping to syllabus topics (local embeddings)...")
-    results = match(kept, load_syllabus(), SlothEngine())
-
-    print("\n[STAGE 5] REPORT: building coverage dashboard...")
-    build_report(results, load_syllabus())
-
-    print("\n[STAGE 6] EXPORT: topic-wise merged PDFs...")
-    export_topics(results)
-    print("\nDone. Open SlothVault/COVERAGE.md and the TopicPDFs/ folder.")
 
 if __name__ == "__main__":
     main()

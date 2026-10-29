@@ -1,36 +1,72 @@
-[
+{
+  "subjects": [
     {
-        "subject": "DBMS",
-        "unit": 3,
-        "topic": "Indexing and Optimization",
-        "subtopics": [
-            "B+ trees",
-            "hash indexes",
-            "query optimization",
-            "join algorithms"
-        ]
+      "code": "OS",
+      "name": "Operating Systems",
+      "units": [
+        {
+          "unit": 1,
+          "title": "CPU Scheduling",
+          "subtopics": [
+            {"name": "FCFS", "keywords": ["fcfs", "first come first serve", "first come first served"]},
+            {"name": "SJF", "keywords": ["sjf", "shortest job first", "srtf"]},
+            {"name": "Round Robin", "keywords": ["round robin", "time quantum"]}
+          ]
+        },
+        {
+          "unit": 2,
+          "title": "Deadlocks",
+          "subtopics": [
+            {"name": "Deadlock Prevention", "keywords": ["deadlock prevention", "prevent deadlock", "prevention"]},
+            {"name": "Deadlock Avoidance", "keywords": ["deadlock avoidance", "avoidance", "safe state"]},
+            {"name": "Banker's Algorithm", "keywords": ["banker", "bankers algorithm"]},
+            {"name": "Recovery from Deadlock", "keywords": ["deadlock recovery", "recovery from deadlock", "process termination", "resource preemption"]}
+          ]
+        },
+        {
+          "unit": 3,
+          "title": "Paging & Virtual Memory",
+          "subtopics": [
+            {"name": "Paging", "keywords": ["paging", "page table"]},
+            {"name": "Thrashing", "keywords": ["thrashing"]},
+            {"name": "LRU Replacement", "keywords": ["lru", "least recently used"]},
+            {"name": "Optimal Replacement", "keywords": ["optimal page replacement", "optimal replacement", "belady"]}
+          ]
+        },
+        {
+          "unit": 4,
+          "title": "Storage",
+          "subtopics": [
+            {"name": "SCAN", "keywords": ["elevator algorithm", "elevator algo", "scan algorithm", "scan scheduling"]},
+            {"name": "C-SCAN", "keywords": ["c scan", "cscan", "circular scan"]},
+            {"name": "RAID", "keywords": ["raid"]}
+          ]
+        }
+      ]
     },
     {
-        "subject": "DBMS",
-        "unit": 4,
-        "topic": "Transactions and Concurrency",
-        "subtopics": [
-            "ACID properties",
-            "two-phase locking",
-            "deadlock",
-            "serializability",
-            "recovery"
-        ]
-    },
-    {
-        "subject": "DBMS",
-        "unit": 5,
-        "topic": "Normalization",
-        "subtopics": [
-            "functional dependency",
-            "1NF 2NF 3NF BCNF",
-            "lossless join",
-            "denormalization"
-        ]
+      "code": "DBMS",
+      "name": "Database Management Systems",
+      "units": [
+        {
+          "unit": 4,
+          "title": "Transactions & Concurrency",
+          "subtopics": [
+            {"name": "ACID Properties", "keywords": ["acid", "atomicity", "durability"]},
+            {"name": "Two-Phase Locking", "keywords": ["two phase locking", "2pl", "growing phase"]},
+            {"name": "Serializability", "keywords": ["serializability", "serializable", "conflict serializable"]}
+          ]
+        },
+        {
+          "unit": 5,
+          "title": "Normalization",
+          "subtopics": [
+            {"name": "Functional Dependency", "keywords": ["functional dependency", "functional dependencies"]},
+            {"name": "1NF, 2NF, 3NF", "keywords": ["1nf", "2nf", "3nf", "first normal form", "third normal form"]},
+            {"name": "BCNF", "keywords": ["bcnf", "boyce codd"]}
+          ]
+        }
+      ]
     }
-]
+  ]
+}
