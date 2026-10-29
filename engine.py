@@ -40,5 +40,5 @@ class SlothEngine:
 # Optional quick test if you run `python engine.py` directly:
 if __name__ == "__main__":
     engine = SlothEngine(model="qwen2.5:7b")
-    reply = engine.ask_json("Return a JSON object with key 'status'", "Say hello like a sloth")
+    reply = engine.generate("Say hello like a sloth", "Return a JSON object with key 'status'")
     print("🦥 Engine test reply:", reply)
