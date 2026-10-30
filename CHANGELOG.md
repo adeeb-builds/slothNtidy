@@ -1,3 +1,11 @@
+## [2026-10-30] - Syllabus from a photo
+- New on 1 · Syllabus: upload photos, a PDF or a Word file of the college syllabus; units and subtopics are read
+  (Tesseract OCR, row by row) and shown as an editable draft that is saved only when the student presses Save
+- Understands "UNIT I" heading layouts and Unit / Topic tables (including rows whose numeral OCR lost),
+  several subjects and pages at once; skips lecture hours, page headers, book lists and course outcomes
+- 10 new tests (21 in total), including a phone photo of a printed syllabus table
+
+
 ## [2026-10-30] - slothNtidy v2: the notes sorter app
 - Added a Streamlit app (app.py) with Syllabus, Import, Sort, Coverage dashboard, Noise reduction, Cluster inspector, Review & duplicates and Sorted vault pages
 - Fixed caption pairing on real WhatsApp exports (invisible U+200E mark; Android and iPhone formats)

@@ -22,6 +22,7 @@ from parser import scan_inbox
 from pipeline import STAGES, assign_to_unit, mark_not_in_syllabus, restore_removed, run
 from mascot import sloth_with_bubble
 from syllabus import load_syllabus, load_syllabus_doc, save_syllabus_doc
+from syllabus_reader import SYLLABUS_TYPES, read_syllabus
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LIVE_EXTRA = os.path.join("sample_data", "live_demo_extra")
@@ -300,11 +301,8 @@ page = st.session_state.nav
 
 # ====================================================================== 1 · Syllabus
 
-def page_syllabus():
-    header("Step 1 of 3", "Your", "syllabus.",
-           "Enter your exam units and subtopics once. <b>Keywords</b> are the words that prove a page covers a "
-           "subtopic (comma-separated). Leave them empty to use the subtopic's own name.")
-    data = load_syllabus_doc()
+def syllabus_rows(data):
+    """Syllabus document -> one table row per subtopic (the format of the editable table)."""
     rows = []
     for s in data["subjects"]:
         for u in s["units"]:
@@ -312,8 +310,79 @@ def page_syllabus():
                 rows.append({"Subject code": s["code"], "Subject name": s["name"], "Unit": int(u["unit"]),
                              "Unit title": u["title"], "Subtopic": stp["name"],
                              "Keywords": ", ".join(stp.get("keywords", []))})
+    return rows
+
+
+def syllabus_upload_box():
+    """Photo / PDF / Word syllabus -> a DRAFT in the table. Nothing is saved until the student presses Save."""
+    has_draft = "syl_draft" in st.session_state
+    with st.expander("Read my syllabus from a photo, PDF or Word file", expanded=not has_draft):
+        st.markdown(
+            "Take a clear, straight photo of each syllabus page (good light, whole page in the frame), or upload "
+            "the PDF / Word file from your college. **Several pages or subjects at once is fine** - they are "
+            "read in file-name order, and phone photos are named by the time they were taken, so photograph the "
+            "pages in order. slothNtidy fills the table below; you check it and press **Save syllabus**.")
+        files = st.file_uploader("Syllabus photos, PDF or Word file", accept_multiple_files=True,
+                                 type=list(SYLLABUS_TYPES), key=f"syl_up_{st.session_state.get('syl_ver', 0)}")
+        mode = st.radio("The table below should be", ["replaced by this syllabus", "kept, and this syllabus added"],
+                        horizontal=True, key="syl_mode")
+        if files and st.button(f"Read {len(files)} file(s)", type="primary"):
+            try:
+                with st.spinner("Reading your syllabus... (about 10 seconds per photo)"):
+                    got = read_syllabus([(f.name, f.getvalue()) for f in sorted(files, key=lambda f: f.name)])
+            except Exception as e:  # Tesseract missing, damaged file, unsupported type
+                st.error(f"Could not read the syllabus: {e}")
+                return
+            new_rows = syllabus_rows(got["syllabus"])
+            if not new_rows:
+                st.error("No units were found in " + ", ".join(f.name for f in files) + ". The page should "
+                         "have headings like 'UNIT I' or a Unit / Topic table. Is the photo sharp and the whole "
+                         "page visible? You can also type the syllabus into the table.")
+                with st.popover("Show the text that was read"):
+                    st.code(got["text"] or "(no text)", language=None)
+                return
+            base = syllabus_rows(load_syllabus_doc()) if mode.startswith("kept") else []
+            subs = got["syllabus"]["subjects"]
+            st.session_state.syl_draft = base + new_rows
+            st.session_state.syl_draft_info = {
+                "summary": f"{len(subs)} subject(s), {sum(len(x['units']) for x in subs)} unit(s), "
+                           f"{len(new_rows)} subtopic(s): " + ", ".join(f"{x['name']} ({x['code']})" for x in subs),
+                "warnings": got["warnings"], "text": got["text"]}
+            st.session_state.syl_ver = st.session_state.get("syl_ver", 0) + 1   # redraw the table with the draft
+            st.rerun()
+
+    if has_draft:
+        info = st.session_state.syl_draft_info
+        st.markdown('<div class="note"><span class="kicker">DRAFT - NOT SAVED YET</span>Read from your syllabus: '
+                    f'{esc(info["summary"])}.<br>Check every row before saving: photos can misread a letter '
+                    '(e.g. <b>SJF</b> read as <b>SJE</b>). Fix the <b>Subject code</b> (it becomes the folder name), '
+                    'delete rows you do not need, then press <b>Save syllabus</b>.</div>', unsafe_allow_html=True)
+        for w in info["warnings"]:
+            st.warning(w)
+        c1, c2, _ = st.columns([1.6, 1.4, 3])
+        with c1.popover("Show the text that was read"):
+            st.code(info["text"], language=None)
+        if c2.button("Discard draft"):
+            clear_syllabus_draft()
+            st.rerun()
+
+
+def clear_syllabus_draft():
+    st.session_state.pop("syl_draft", None)
+    st.session_state.pop("syl_draft_info", None)
+    st.session_state.syl_ver = st.session_state.get("syl_ver", 0) + 1
+
+
+def page_syllabus():
+    header("Step 1 of 3", "Your", "syllabus.",
+           "Upload a photo of your syllabus, or type it in. <b>Keywords</b> are the words that prove a page covers a "
+           "subtopic (comma-separated). Leave them empty to use the subtopic's own name.")
+    if "syl_saved" in st.session_state:
+        st.success(st.session_state.pop("syl_saved"))
+    syllabus_upload_box()
+    rows = st.session_state.get("syl_draft") or syllabus_rows(load_syllabus_doc())
     edited = st.data_editor(
-        rows, num_rows="dynamic", hide_index=True, key="syl_editor", height=min(42 + 35 * (len(rows) + 2), 620),
+        rows, num_rows="dynamic", hide_index=True, key=f"syl_editor_{st.session_state.get('syl_ver', 0)}", height=min(42 + 35 * (len(rows) + 2), 620),
         column_config={
             "Subject code": st.column_config.TextColumn(width="small", required=True),
             "Unit": st.column_config.NumberColumn(width="small", min_value=1, step=1, required=True),
@@ -332,10 +401,19 @@ def page_syllabus():
             kws = [k.strip() for k in (r.get("Keywords") or "").split(",") if k.strip()]
             u["subtopics"].append({"name": r["Subtopic"].strip(), "keywords": kws})
         out = {"subjects": [{**s, "units": [s["units"][k] for k in sorted(s["units"])]} for s in subjects.values()]}
-        save_syllabus_doc(out)
-        st.success(f"Saved {sum(len(s['units']) for s in out['subjects'])} units. Sort again to use it.")
+        if not out["subjects"]:
+            st.error("Nothing to save: every row needs a Subject code, a Unit title and a Subtopic.")
+        else:
+            save_syllabus_doc(out)
+            was_draft = "syl_draft" in st.session_state
+            clear_syllabus_draft()
+            st.session_state.syl_saved = f"Saved {sum(len(s['units']) for s in out['subjects'])} units. Sort again to use it."
+            if was_draft:
+                st.rerun()
+            st.success(st.session_state.pop("syl_saved"))
     if c2.button("Restore sample syllabus") and os.path.exists(DEFAULT_SYLLABUS):
         shutil.copyfile(DEFAULT_SYLLABUS, SYLLABUS_FILE)
+        clear_syllabus_draft()
         st.rerun()
     st.markdown('<div class="how"><b>WHY KEYWORDS?</b> A subtopic is only ticked when its words are found on an actual '
                 'page - so every tick can be traced back to a page. The local AI model (MiniLM) helps decide '

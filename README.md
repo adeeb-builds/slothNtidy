@@ -15,7 +15,7 @@ Before every internal exam, notes arrive across 4–5 WhatsApp groups: teachers'
 
 ## What slothNtidy does
 
-You enter your syllabus once, drop in the WhatsApp exports, and press **Sort my notes**:
+You photograph your syllabus (or type it) once, drop in the WhatsApp exports, and press **Sort my notes**:
 
 | Stage | What happens |
 |---|---|
@@ -69,7 +69,7 @@ Regenerate the demo any time: `python scripts/make_demo_data.py`
 
 1. In WhatsApp, open a group → **⋮ → More → Export chat → Include media** (iPhone: group name → **Export Chat → Attach Media**).
 2. Get the `.zip` onto your laptop, open **2 · Import chats → My own files**, and drop the zips in. Repeat for every group.
-3. Edit your syllabus on **1 · Syllabus** (units, subtopics and the keywords that prove a subtopic).
+3. On **1 · Syllabus**, open **Read my syllabus from a photo, PDF or Word file**, upload a clear photo of each syllabus page (or the PDF / .docx from your college) and press **Read**. The table fills in as a *draft*: check it (a photo can misread a letter), then **Save syllabus**. You can also type or edit rows by hand.
 4. **3 · Sort** → read your dashboard.
 
 ---
@@ -108,6 +108,7 @@ filing.py         copies notes into SlothVault with clean names
 exporter.py       one merged PDF per unit (cover page + original pages, bookmarks)
 report.py         COVERAGE.md + report.json
 syllabus.py       syllabus load/save         config.py      every folder and threshold
+syllabus_reader.py  syllabus photo / PDF / Word -> units and subtopics (Tesseract OCR + layout rules, draft only)
 scripts/make_demo_data.py   builds the 4-group demo      tests/        pytest suite (no internet needed)
 ```
 
@@ -117,12 +118,13 @@ Outputs land in `output/`: `SlothVault/` (sorted copies), `TopicPDFs/` (merged P
 ```bash
 python -m pytest -q
 ```
-Covers caption pairing on real Android/iPhone exports (including WhatsApp's invisible U+200E mark), circular filtering, exact and near duplicates, subtopic evidence, ambiguous notes, and a full end-to-end run of the demo groups.
+Covers caption pairing on real Android/iPhone exports (including WhatsApp's invisible U+200E mark), circular filtering, exact and near duplicates, subtopic evidence, ambiguous notes, a full end-to-end run of the demo groups, and reading a syllabus from text, a Word table, a PDF and a phone photo.
 
 ## Known limits & roadmap
 * **Handwriting:** Tesseract reads neat handwriting; messy handwriting may land in *Needs review* (flagged, never lost). The demo uses a handwriting font so it is repeatable — try your own photos too. *Help wanted:* a local vision-OCR path.
 * `.docx` / `.pptx` attachments are listed but not read yet.
-* Keywords are per-subtopic; a future version could suggest them from the syllabus automatically.
+* Keywords are per-subtopic; a syllabus read from a photo gets keywords only for short forms like *Shortest Job First (SJF)*. Long subtopic names work better with a few short keywords added by hand.
+* The syllabus reader understands "UNIT I" headings and Unit / Topic tables; unusual layouts may need more correction in the table.
 
 ## Earlier tools in this repo
 `Tidy.py` (LLM-based PDF tidier) and `sloth.py` (offline Git commit helper via Ollama) are the team's earlier experiments and are not part of the notes-sorter pipeline. `engine.py` is their Ollama client.
