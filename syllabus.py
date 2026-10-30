@@ -1,6 +1,6 @@
 """Loads and saves the syllabus that notes are mapped against.
 
-File format (sample_data/syllabus.json):
+File format (my_syllabus.json, made on the Syllabus page; starts empty):
 {
   "subjects": [
     {"code": "OS", "name": "Operating Systems",
@@ -15,6 +15,7 @@ If none are given, the subtopic's own name is used. The older flat format
 ([{"subject", "unit", "topic", "subtopics": [..]}]) is still accepted.
 """
 import json
+import os
 import re
 
 from config import SYLLABUS_FILE
@@ -36,6 +37,9 @@ def _from_legacy(items: list) -> dict:
 
 
 def load_syllabus_doc(path: str = SYLLABUS_FILE) -> dict:
+    """An empty syllabus until the student saves one on the Syllabus page."""
+    if not os.path.exists(path):
+        return {"subjects": []}
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return _from_legacy(data) if isinstance(data, list) else data

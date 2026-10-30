@@ -12,10 +12,11 @@ import subprocess
 import time
 from collections import defaultdict
 
+import pandas as pd
 import pymupdf as fitz
 import streamlit as st
 
-from config import (DEMO_INBOX, INBOX_FOLDER, OUTPUT_FOLDER, REPORT_JSON, REPORT_MD, SYLLABUS_FILE,
+from config import (INBOX_FOLDER, OUTPUT_FOLDER, REPORT_JSON, REPORT_MD, SYLLABUS_FILE,
                     VAULT_FOLDER, configure_tesseract)
 from embedder import load_embedder
 from parser import scan_inbox
@@ -25,8 +26,6 @@ from syllabus import load_syllabus, load_syllabus_doc, save_syllabus_doc
 from syllabus_reader import SYLLABUS_TYPES, read_syllabus
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-LIVE_EXTRA = os.path.join("sample_data", "live_demo_extra")
-DEFAULT_SYLLABUS = os.path.join("sample_data", "syllabus.default.json")
 os.chdir(HERE)  # all paths in config.py are relative to the project folder
 
 st.set_page_config(page_title="slothNtidy - Notes Sorter", page_icon="🦥", layout="wide",
@@ -187,9 +186,12 @@ def load_last_result():
     if os.path.exists(REPORT_JSON):
         try:
             with open(REPORT_JSON, encoding="utf-8") as f:
-                return json.load(f)
+                r = json.load(f)
         except (OSError, json.JSONDecodeError):
             return None
+        if "demo" in str(r.get("inbox", "")).lower():   # results left over from the old built-in demo
+            return None
+        return r
     return None
 
 
@@ -197,12 +199,6 @@ if "result" not in st.session_state:
     st.session_state.result = load_last_result()
 if "log" not in st.session_state:
     st.session_state.log = []
-if "source" not in st.session_state:
-    st.session_state.source = "mine"
-if "late" not in st.session_state:
-    st.session_state.late = False
-if not os.path.exists(DEFAULT_SYLLABUS) and os.path.exists(SYLLABUS_FILE):
-    shutil.copyfile(SYLLABUS_FILE, DEFAULT_SYLLABUS)
 
 embedder, engine_msgs = get_engine()
 R = st.session_state.result
@@ -217,8 +213,6 @@ def unit_label(u):
 
 
 def selected_inboxes():
-    if st.session_state.source == "demo":
-        return [DEMO_INBOX] + ([LIVE_EXTRA] if st.session_state.late else [])
     return [INBOX_FOLDER]
 
 
@@ -269,7 +263,8 @@ def need_result():
 PAGES = ["1 · Syllabus", "2 · Import chats", "3 · Sort", "Coverage dashboard", "Noise reduction",
          "Cluster inspector", "Review & duplicates", "Sorted vault"]
 if "nav" not in st.session_state:
-    st.session_state.nav = "Coverage dashboard" if R else "2 · Import chats"
+    st.session_state.nav = ("Coverage dashboard" if R else
+                            "2 · Import chats" if load_syllabus_doc()["subjects"] else "1 · Syllabus")
 if "goto" in st.session_state:  # page switches requested by buttons (must happen before the menu is drawn)
     st.session_state.nav = st.session_state.pop("goto")
 
@@ -300,6 +295,9 @@ page = st.session_state.nav
 
 
 # ====================================================================== 1 · Syllabus
+
+SYL_COLUMNS = ["Subject code", "Subject name", "Unit", "Unit title", "Subtopic", "Keywords"]
+
 
 def syllabus_rows(data):
     """Syllabus document -> one table row per subtopic (the format of the editable table)."""
@@ -381,17 +379,23 @@ def page_syllabus():
         st.success(st.session_state.pop("syl_saved"))
     syllabus_upload_box()
     rows = st.session_state.get("syl_draft") or syllabus_rows(load_syllabus_doc())
+    if not rows:
+        st.markdown('<div class="note"><span class="kicker">NO SYLLABUS YET</span>Upload a photo of your syllabus '
+                    'above, or type it into the table below (click <b>+</b> to add a row), then press '
+                    '<b>Save syllabus</b>.</div>', unsafe_allow_html=True)
+    table = pd.DataFrame(rows, columns=SYL_COLUMNS)   # fixed columns, so an empty table still shows them
     edited = st.data_editor(
-        rows, num_rows="dynamic", hide_index=True, key=f"syl_editor_{st.session_state.get('syl_ver', 0)}", height=min(42 + 35 * (len(rows) + 2), 620),
+        table, num_rows="dynamic", hide_index=True, key=f"syl_editor_{st.session_state.get('syl_ver', 0)}", height=min(42 + 35 * (len(rows) + 2), 620),
         column_config={
             "Subject code": st.column_config.TextColumn(width="small", required=True),
             "Unit": st.column_config.NumberColumn(width="small", min_value=1, step=1, required=True),
             "Keywords": st.column_config.TextColumn(width="large"),
         })
-    c1, c2, _ = st.columns([1.2, 1.6, 3])
-    if c1.button("Save syllabus", type="primary"):
+    if st.button("Save syllabus", type="primary"):
         subjects = {}
-        for r in edited:
+        for r in edited.to_dict("records"):
+            r = {k: ("" if (v is None or (isinstance(v, float) and v != v)) else v) for k, v in r.items()}
+            r = {k: (v.strip() if isinstance(v, str) else v) for k, v in r.items()}
             if not (r.get("Subject code") and r.get("Unit title") and r.get("Subtopic")):
                 continue
             s = subjects.setdefault(r["Subject code"].strip(), {"code": r["Subject code"].strip(),
@@ -411,10 +415,6 @@ def page_syllabus():
             if was_draft:
                 st.rerun()
             st.success(st.session_state.pop("syl_saved"))
-    if c2.button("Restore sample syllabus") and os.path.exists(DEFAULT_SYLLABUS):
-        shutil.copyfile(DEFAULT_SYLLABUS, SYLLABUS_FILE)
-        clear_syllabus_draft()
-        st.rerun()
     st.markdown('<div class="how"><b>WHY KEYWORDS?</b> A subtopic is only ticked when its words are found on an actual '
                 'page - so every tick can be traced back to a page. The local AI model (MiniLM) helps decide '
                 'which unit a note belongs to, but it never ticks a subtopic on its own.</div>', unsafe_allow_html=True)
@@ -439,7 +439,6 @@ def _inbox_table(roots):
 def page_import():
     header("Step 2 of 3", "Import your", "class groups.",
            "Export each WhatsApp group <b>with media</b> and drop the .zip files here. Loose PDFs and photos work too.")
-    st.session_state.source = "mine"
 
     os.makedirs(INBOX_FOLDER, exist_ok=True)
     with st.expander("How to export a WhatsApp group (30 seconds)", expanded=True):
@@ -495,9 +494,9 @@ def page_sort():
            "and builds one exam-ready PDF per unit. Your original files are never changed.")
     roots = selected_inboxes()
     n = len(_inbox_table(roots))
-    src = "the built-in demo groups" if st.session_state.source == "demo" else "your inbox"
-    st.markdown(f'<div class="note"><span class="kicker">READY</span>{n} file(s) from {src} · '
-                f'syllabus with {len(load_syllabus())} units · '
+    n_units = len(load_syllabus())
+    st.markdown(f'<div class="note"><span class="kicker">READY</span>{n} file(s) in your inbox · '
+                f'syllabus with {n_units} units · '
                 f'engine: {esc(embedder.name if embedder else "keyword evidence only")}</div>', unsafe_allow_html=True)
     buddy = st.empty()
     buddy.markdown('<div class="hero-mascot">' + sloth_with_bubble(
@@ -505,8 +504,10 @@ def page_sort():
         + "</div>", unsafe_allow_html=True)
     bar = st.empty()
     bar.markdown(stagebar(), unsafe_allow_html=True)
-    if not st.button("Sort my notes", type="primary", disabled=n == 0):
-        if n == 0:
+    if not st.button("Sort my notes", type="primary", disabled=n == 0 or n_units == 0):
+        if n_units == 0:
+            st.caption("Add your syllabus first - go to 1 · Syllabus and upload a photo of it.")
+        elif n == 0:
             st.caption("Nothing to sort yet - add files on the Import page.")
         return
     prog = st.progress(0.0, text="Starting...")

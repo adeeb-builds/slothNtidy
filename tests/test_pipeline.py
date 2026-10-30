@@ -14,7 +14,7 @@ from parser import extract_pdf, parse_chat
 from syllabus import load_syllabus
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UNITS = load_syllabus(os.path.join(ROOT, "sample_data", "syllabus.json"))
+UNITS = load_syllabus(os.path.join(ROOT, "tests", "demo_data", "syllabus.json"))
 
 
 def make_pdf(tmp_path, name, *pages):
@@ -85,7 +85,7 @@ def test_iphone_export_caption_in_next_message(tmp_path):
 
 
 def test_short_format_from_the_original_sample():
-    meta = parse_chat(os.path.join(ROOT, "sample_data", "whatsapp_chat.txt"))
+    meta = parse_chat(os.path.join(ROOT, "tests", "demo_data", "whatsapp_chat.txt"))
     assert meta["dbms_pdf3.pdf"]["caption"] == "Deadlock notes, recovery skipped"
 
 
@@ -129,8 +129,8 @@ def demo_run(tmp_path, monkeypatch):
 @pytest.mark.skipif(not configure_tesseract(), reason="Tesseract not installed")
 def test_demo_end_to_end(demo_run):
     pipeline, out = demo_run
-    r = pipeline.run(os.path.join(ROOT, "sample_data", "demo_inbox"),
-                     os.path.join(ROOT, "sample_data", "syllabus.json"), None, log=lambda *x: None)
+    r = pipeline.run(os.path.join(ROOT, "tests", "demo_data", "demo_inbox"),
+                     os.path.join(ROOT, "tests", "demo_data", "syllabus.json"), None, log=lambda *x: None)
     c = r["counts"]
     assert (c["total"], c["circulars"], c["exact_dups"], c["near_dups"], c["kept"]) == (13, 3, 1, 2, 7)
     status = {u["unit_id"]: u["status"] for u in r["units"]}

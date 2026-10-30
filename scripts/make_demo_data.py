@@ -2,8 +2,8 @@
 
     python scripts/make_demo_data.py
 
-Creates sample_data/demo_inbox/<Group>/ with a WhatsApp chat export (.txt) and the
-media files it mentions, plus sample_data/live_demo_extra/ with a Paging note to drop
+Creates tests/demo_data/demo_inbox/<Group>/ with a WhatsApp chat export (.txt) and the
+media files it mentions, plus tests/demo_data/live_demo_extra/ with a Paging note to drop
 in during the live demo (turns the red Unit 3 green).
 
 What is inside (13 files):
@@ -26,8 +26,8 @@ import pymupdf as fitz
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "sample_data", "demo_inbox")
-EXTRA = os.path.join(ROOT, "sample_data", "live_demo_extra")
+OUT = os.path.join(ROOT, "tests", "demo_data", "demo_inbox")
+EXTRA = os.path.join(ROOT, "tests", "demo_data", "live_demo_extra")
 HAND_FONT = os.path.join(ROOT, "assets", "fonts", "kalam-latin-400-normal.woff")
 LRM = "‎"  # the invisible mark real WhatsApp exports put before attachment names
 

@@ -11,8 +11,7 @@ TOPIC_FOLDER = os.path.join(OUTPUT_FOLDER, "TopicPDFs")       # one merged exam-
 WORK_FOLDER = os.path.join(OUTPUT_FOLDER, "_work")            # photos converted to PDF pages, etc.
 REPORT_JSON = os.path.join(OUTPUT_FOLDER, "report.json")      # full results, read by the UI
 REPORT_MD = os.path.join(OUTPUT_FOLDER, "COVERAGE.md")        # human-readable coverage dashboard
-SYLLABUS_FILE = "./sample_data/syllabus.json"
-DEMO_INBOX = "./sample_data/demo_inbox"    # ready-made demo: 4 WhatsApp groups, OS + DBMS notes
+SYLLABUS_FILE = "./my_syllabus.json"     # your syllabus, made on the Syllabus page (starts empty)
 
 # File types the pipeline reads. Photos are converted to PDF pages (pixels kept as-is).
 PDF_TYPES = (".pdf",)

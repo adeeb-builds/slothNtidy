@@ -1,24 +1,22 @@
 """slothNtidy from the command line (the UI is app.py).
 
     python main.py            # sort whatever is in ./inbox
-    python main.py --demo     # sort the ready-made demo (4 WhatsApp groups)
 """
 import argparse
 
-from config import DEMO_INBOX, INBOX_FOLDER, SYLLABUS_FILE
+from config import INBOX_FOLDER, SYLLABUS_FILE
 from embedder import load_embedder
 from pipeline import run
 
 
 def main():
     ap = argparse.ArgumentParser(description="Sort WhatsApp study notes by syllabus.")
-    ap.add_argument("--demo", action="store_true", help="use the sample WhatsApp groups in sample_data/")
     ap.add_argument("--inbox", default=None, help=f"folder to sort (default {INBOX_FOLDER})")
     ap.add_argument("--syllabus", default=SYLLABUS_FILE)
     ap.add_argument("--no-ai", action="store_true", help="keyword evidence only, skip the embedding model")
     args = ap.parse_args()
 
-    inbox = args.inbox or (DEMO_INBOX if args.demo else INBOX_FOLDER)
+    inbox = args.inbox or INBOX_FOLDER
     print("slothNtidy - loading the local matching engine...")
     embedder = None if args.no_ai else load_embedder()
     try:

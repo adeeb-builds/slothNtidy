@@ -1,4 +1,6 @@
-## [2026-10-30] - Syllabus from a photo
+## [2026-10-30] - Syllabus from a photo, no built-in demo
+- The app now starts empty: the sample syllabus and sample class groups are gone from the app (they live on in
+  tests/demo_data for the automated tests only). Your syllabus is saved to my_syllabus.json; old demo results are ignored
 - New on 1 · Syllabus: upload photos, a PDF or a Word file of the college syllabus; units and subtopics are read
   (Tesseract OCR, row by row) and shown as an editable draft that is saved only when the student presses Save
 - Understands "UNIT I" heading layouts and Unit / Topic tables (including rows whose numeral OCR lost),

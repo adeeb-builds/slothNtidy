@@ -51,26 +51,18 @@ Nothing is ever deleted: removed files are copied to `_Removed/`, and you can br
 
 ### Command line (no UI)
 ```bash
-python main.py --demo      # sort the built-in demo groups
-python main.py             # sort whatever is in ./inbox
+python main.py             # sort whatever is in ./inbox, using my_syllabus.json
 ```
 
 ---
 
-## Try the demo (built in)
+## How to use it
 
-`sample_data/demo_inbox/` holds four realistic class groups (`Official_CSE_Group`, `Unofficial_Class`, `OS_Lab_Section`, `Hostel_Wing`) with 13 files: teacher notes, a byte-identical re-share, a shorter re-typed copy, two photos of the same handwritten page, three circulars, a meme, and a note that fits both OS and DBMS. Nobody has shared Paging notes — so Unit 3 shows up **red**.
+The app starts empty: no sample syllabus and no sample chats.
 
-**Live moment:** on the Import page, switch on *"Include a late message"* and sort again — Rohan's Paging notes arrive and Unit 3 turns green.
-
-Regenerate the demo any time: `python scripts/make_demo_data.py`
-
-## Use it with your own groups
-
-1. In WhatsApp, open a group → **⋮ → More → Export chat → Include media** (iPhone: group name → **Export Chat → Attach Media**).
-2. Get the `.zip` onto your laptop, open **2 · Import chats → My own files**, and drop the zips in. Repeat for every group.
-3. On **1 · Syllabus**, open **Read my syllabus from a photo, PDF or Word file**, upload a clear photo of each syllabus page (or the PDF / .docx from your college) and press **Read**. The table fills in as a *draft*: check it (a photo can misread a letter), then **Save syllabus**. You can also type or edit rows by hand.
-4. **3 · Sort** → read your dashboard.
+1. On **1 · Syllabus**, open **Read my syllabus from a photo, PDF or Word file**, upload a clear photo of each syllabus page (or the PDF / .docx from your college) and press **Read**. The table fills in as a *draft*: check it (a photo can misread a letter), then **Save syllabus**. You can also type or edit rows by hand. It is saved to `my_syllabus.json`.
+2. In WhatsApp, open a group → **⋮ → More → Export chat → Include media** (iPhone: group name → **Export Chat → Attach Media**). Get the `.zip` onto your laptop, open **2 · Import chats**, and drop the zips in. Repeat for every group.
+3. **3 · Sort** → read your dashboard.
 
 ---
 
@@ -91,7 +83,7 @@ Regenerate the demo any time: `python scripts/make_demo_data.py`
 
 ## Privacy
 
-WhatsApp exports contain classmates' names and phone numbers. slothNtidy processes everything on your laptop and never uploads anything. `inbox/` and `output/` are git-ignored — **never commit a real chat export**; use the demo data to share examples.
+WhatsApp exports contain classmates' names and phone numbers. slothNtidy processes everything on your laptop and never uploads anything. `inbox/`, `output/` and `my_syllabus.json` are git-ignored — **never commit a real chat export**.
 
 ---
 
@@ -109,7 +101,8 @@ exporter.py       one merged PDF per unit (cover page + original pages, bookmark
 report.py         COVERAGE.md + report.json
 syllabus.py       syllabus load/save         config.py      every folder and threshold
 syllabus_reader.py  syllabus photo / PDF / Word -> units and subtopics (Tesseract OCR + layout rules, draft only)
-scripts/make_demo_data.py   builds the 4-group demo      tests/        pytest suite (no internet needed)
+tests/            pytest suite (no internet needed); tests/demo_data holds the made-up groups the tests use
+scripts/make_demo_data.py   regenerates tests/demo_data
 ```
 
 Outputs land in `output/`: `SlothVault/` (sorted copies), `TopicPDFs/` (merged PDFs), `COVERAGE.md`, `report.json`.
@@ -118,10 +111,10 @@ Outputs land in `output/`: `SlothVault/` (sorted copies), `TopicPDFs/` (merged P
 ```bash
 python -m pytest -q
 ```
-Covers caption pairing on real Android/iPhone exports (including WhatsApp's invisible U+200E mark), circular filtering, exact and near duplicates, subtopic evidence, ambiguous notes, a full end-to-end run of the demo groups, and reading a syllabus from text, a Word table, a PDF and a phone photo.
+Covers caption pairing on real Android/iPhone exports (including WhatsApp's invisible U+200E mark), circular filtering, exact and near duplicates, subtopic evidence, ambiguous notes, a full end-to-end run on made-up class groups, and reading a syllabus from text, a Word table, a PDF and a phone photo.
 
 ## Known limits & roadmap
-* **Handwriting:** Tesseract reads neat handwriting; messy handwriting may land in *Needs review* (flagged, never lost). The demo uses a handwriting font so it is repeatable — try your own photos too. *Help wanted:* a local vision-OCR path.
+* **Handwriting:** Tesseract reads neat handwriting; messy handwriting may land in *Needs review* (flagged, never lost). Test with your own photos. *Help wanted:* a local vision-OCR path.
 * `.docx` / `.pptx` attachments are listed but not read yet.
 * Keywords are per-subtopic; a syllabus read from a photo gets keywords only for short forms like *Shortest Job First (SJF)*. Long subtopic names work better with a few short keywords added by hand.
 * The syllabus reader understands "UNIT I" headings and Unit / Topic tables; unusual layouts may need more correction in the table.
