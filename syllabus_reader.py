@@ -135,6 +135,8 @@ GENERIC = {"introduction", "overview", "basics", "basic concepts", "summary", "c
 NOT_A_TITLE = re.compile(r"^\W*(?:unit|units|topics?|contents?|hours?|hrs|lectures?|s\.?\s?no|sr\.?\s?no|syllabus|"
                          r"course\s+code|subject\s+code|paper\s+code|max|marks|credits?|l\s*-?\s*t\s*-?\s*p|"
                          r"proposed|no\.? of)\b", re.I)
+HEADER_ROW = re.compile(r"^\W*[A-Z]{2,5}[\s\-]?\d{3,4}[A-Z]?\W+([A-Za-z][A-Za-z&,'()\- ]{3,60}?)\W+"
+                        r"(?:\d\s*L\b|\d\s*-\s*\d\s*-\s*\d|\d+\s*credits?)", re.I)
 SMALL = {"and", "of", "the", "&", "to", "in", "for", "with", "on", "a", "an"}
 
 
@@ -278,6 +280,9 @@ def parse_text(text: str) -> dict:
             # the first heading-like line wins; in a header row "PC303 | Computer Networks | 3L:0T:0P"
             # each cell is tried on its own
             cells = [c for c in re.split(r"\s*[|\[\]]\s*", line) if c.strip()] if line.count("|") >= 2 else [line]
+            hm = HEADER_ROW.match(line)      # "PC303 Computer Networks 3L:0T:0P 3 Credits" (no table lines)
+            if hm:
+                cells = [hm.group(1)] + cells
             for cell in cells:
                 cell = cell.strip(" _—–-.")
                 if _looks_like_title(cell):

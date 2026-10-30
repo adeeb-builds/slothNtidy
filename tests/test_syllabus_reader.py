@@ -203,3 +203,9 @@ def test_the_real_syllabus_screenshot():
     assert [u["title"] for u in s["units"]] == ["Computer Networks and The Internet", "Application Layer",
                                                 "Transport Layer", "Network Layer", "Data Link Layer"]
     assert any("small image" in w for w in got["warnings"])
+
+
+def test_subject_from_a_header_row_without_table_lines():
+    s = to_syllabus(parse_text("PC303 Computer Networks 3L:0T:0P 3 Credits\nUnit 1: Application Layer [9 hrs]\n"
+                               "The Web and HTTP; DNS.\n"))["subjects"][0]
+    assert (s["code"], s["name"]) == ("CN", "Computer Networks")
