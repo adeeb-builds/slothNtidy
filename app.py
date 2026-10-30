@@ -161,7 +161,7 @@ st.markdown(f"<style>{_css()}</style>", unsafe_allow_html=True)
 
 
 def header(kicker, title, accent, lede=""):
-    st.markdown(f'<div class="kicker">{kicker}</div><div class="page-title">{title} <span>{accent}</span></div>'
+    st.markdown((f'<div class="kicker">{kicker}</div>' if kicker else "") + f'<div class="page-title">{title} <span>{accent}</span></div>'
                 + (f'<div class="lede">{lede}</div>' if lede else ""), unsafe_allow_html=True)
 
 
@@ -197,7 +197,7 @@ if "result" not in st.session_state:
 if "log" not in st.session_state:
     st.session_state.log = []
 if "source" not in st.session_state:
-    st.session_state.source = "demo"
+    st.session_state.source = "mine"
 if "late" not in st.session_state:
     st.session_state.late = False
 if not os.path.exists(DEFAULT_SYLLABUS) and os.path.exists(SYLLABUS_FILE):
@@ -273,8 +273,7 @@ if "goto" in st.session_state:  # page switches requested by buttons (must happe
     st.session_state.nav = st.session_state.pop("goto")
 
 with st.sidebar:
-    st.markdown('<div class="side-kicker">HACKTOBERFEST [26] // BFIT</div>'
-                '<div class="brand">slothNtidy<br><span>Notes Sorter.</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand">slothNtidy<br><span>Notes Sorter.</span></div>', unsafe_allow_html=True)
     st.caption("WhatsApp chaos → syllabus-mapped exam notes")
     if R:
         _miss = sum(u["status"] == "MISSING" for u in R["units"])
@@ -302,7 +301,7 @@ page = st.session_state.nav
 # ====================================================================== 1 · Syllabus
 
 def page_syllabus():
-    header("STEP 1 OF 3 // ONE-TIME SETUP", "Your", "syllabus.",
+    header("Step 1 of 3", "Your", "syllabus.",
            "Enter your exam units and subtopics once. <b>Keywords</b> are the words that prove a page covers a "
            "subtopic (comma-separated). Leave them empty to use the subtopic's own name.")
     data = load_syllabus_doc()
@@ -335,7 +334,7 @@ def page_syllabus():
         out = {"subjects": [{**s, "units": [s["units"][k] for k in sorted(s["units"])]} for s in subjects.values()]}
         save_syllabus_doc(out)
         st.success(f"Saved {sum(len(s['units']) for s in out['subjects'])} units. Sort again to use it.")
-    if c2.button("Restore demo syllabus") and os.path.exists(DEFAULT_SYLLABUS):
+    if c2.button("Restore sample syllabus") and os.path.exists(DEFAULT_SYLLABUS):
         shutil.copyfile(DEFAULT_SYLLABUS, SYLLABUS_FILE)
         st.rerun()
     st.markdown('<div class="how"><b>WHY KEYWORDS?</b> A subtopic is only ticked when its words are found on an actual '
@@ -360,26 +359,12 @@ def _inbox_table(roots):
 
 
 def page_import():
-    header("STEP 2 OF 3 // INPUT", "Import your", "class groups.",
-           "Export each WhatsApp group <b>with media</b> and drop the .zip files here - or use the built-in demo.")
-    choice = st.radio("Which notes should slothNtidy sort?",
-                      ["Demo: 4 WhatsApp class groups (built in)", "My own files"],
-                      index=0 if st.session_state.source == "demo" else 1, horizontal=True)
-    st.session_state.source = "demo" if choice.startswith("Demo") else "mine"
-
-    if st.session_state.source == "demo":
-        st.session_state.late = st.toggle(
-            "Include a late message: Rohan shares Unit 3 paging notes (use this live to turn the red row green)",
-            value=st.session_state.late)
-        rows = _inbox_table(selected_inboxes())
-        groups = sorted({r["Group"] for r in rows})
-        st.markdown(f'<div class="kicker">{len(rows)} FILES FROM {len(groups)} GROUPS // {" · ".join(groups)}</div>',
-                    unsafe_allow_html=True)
-        st.dataframe(rows, hide_index=True, width="stretch", height=min(40 + 35 * len(rows), 560))
-        return
+    header("Step 2 of 3", "Import your", "class groups.",
+           "Export each WhatsApp group <b>with media</b> and drop the .zip files here. Loose PDFs and photos work too.")
+    st.session_state.source = "mine"
 
     os.makedirs(INBOX_FOLDER, exist_ok=True)
-    with st.expander("How to export a WhatsApp group (30 seconds)", expanded=False):
+    with st.expander("How to export a WhatsApp group (30 seconds)", expanded=True):
         st.markdown(
             "**Android:** open the group → ⋮ (top right) → **More** → **Export chat** → **Include media** → "
             "save the .zip to this laptop (e.g. send it to yourself on Google Drive or by USB).\n\n"
@@ -399,7 +384,7 @@ def page_import():
         st.rerun()
 
     rows = _inbox_table([INBOX_FOLDER])
-    st.markdown(f'<div class="kicker">INBOX // {len(rows)} NOTES READY TO SORT</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="kicker">INBOX · {len(rows)} NOTES READY TO SORT</div>', unsafe_allow_html=True)
     if rows:
         st.dataframe(rows, hide_index=True, width="stretch", height=min(40 + 35 * len(rows), 480))
     else:
@@ -421,13 +406,13 @@ def stagebar(active=-1, done_upto=-1):
     cells = []
     for i, s in enumerate(STAGES):
         cls = "done" if i <= done_upto else ("now" if i == active else "")
-        tag = "✓ CLEAR" if i <= done_upto else f"LEVEL {i + 1}"
+        tag = "✓ DONE" if i <= done_upto else f"STEP {i + 1}"
         cells.append(f'<div class="stage {cls}"><span class="s">{tag}</span>{s}</div>')
     return '<div class="stagebar">' + "".join(cells) + "</div>"
 
 
 def page_sort():
-    header("STEP 3 OF 3 // ONE CLICK", "Sort my", "notes.",
+    header("Step 3 of 3", "Sort my", "notes.",
            "Reads every file, removes circulars and duplicates, matches notes to your syllabus, files clean copies "
            "and builds one exam-ready PDF per unit. Your original files are never changed.")
     roots = selected_inboxes()
@@ -456,7 +441,7 @@ def page_sort():
     def progress(i, name, done, total, msg):
         bar.markdown(stagebar(active=i, done_upto=i - 1), unsafe_allow_html=True)
         buddy.markdown('<div class="hero-mascot">' + sloth_with_bubble(
-            "working", f"LEVEL {i + 1}/{len(STAGES)} · {esc(name)}<br>{esc(msg)[:70]}", px=7) + "</div>",
+            "working", f"Step {i + 1} of {len(STAGES)} · {esc(name)}<br>{esc(msg)[:70]}", px=7) + "</div>",
             unsafe_allow_html=True)
         frac = (i + (done / total if total else 1)) / len(STAGES)
         prog.progress(min(frac, 1.0), text=f"Stage {i + 1} · {name}: {msg}")
@@ -472,7 +457,7 @@ def page_sort():
         return
     bar.markdown(stagebar(done_upto=len(STAGES) - 1), unsafe_allow_html=True)
     buddy.markdown('<div class="hero-mascot">' + sloth_with_bubble(
-        "happy", f"ALL LEVELS CLEAR! {result['counts']['total']} files → {result['counts']['kept']} notes "
+        "happy", f"All done! {result['counts']['total']} files → {result['counts']['kept']} notes "
                  f"in {result['seconds']} s. Opening your dashboard...", px=7) + "</div>", unsafe_allow_html=True)
     prog.progress(1.0, text=f"Done in {result['seconds']} s")
     log_box.code("\n".join(lines), language=None)
@@ -491,7 +476,7 @@ def request_message(row):
 
 
 def page_coverage():
-    header("RESULTS // KNOW YOUR GAPS BEFORE EXAM NIGHT", "Coverage", "Dashboard.")
+    header("", "Coverage", "Dashboard.")
     if need_result():
         return
     c, units = R["counts"], R["units"]
@@ -551,7 +536,7 @@ def page_coverage():
                         st.rerun()
     st.container(key="lastrow")
 
-    st.markdown('<div class="how"><b>HOW A GAP IS DECIDED // NO BLACK BOX</b><br>After de-duplication, every subtopic '
+    st.markdown('<div class="how"><b>HOW A GAP IS DECIDED</b><br>After de-duplication, every subtopic '
                 'is searched for on the pages of each note. COVERED = its keywords appear on a page (we show which '
                 'page). MISSING = no note covers it. NEEDS REVIEW = some subtopics are still missing, or a note fits '
                 'more than one unit - shown to you, never guessed.</div>', unsafe_allow_html=True)
@@ -564,7 +549,7 @@ def page_coverage():
 # ====================================================================== Noise reduction (deck slide 9)
 
 def page_noise():
-    header("RESULTS // WHAT WE THREW OUT", "Noise", "Reduction.")
+    header("", "Noise", "Reduction.")
     if need_result():
         return
     c, m = R["counts"], R["match_counts"]
@@ -581,7 +566,7 @@ def page_noise():
                  f'<div class="fill" style="width:{pct * 100:.1f}%;background:{col}"></div></div>'
                  f'<div class="num">{n} of {c["total"]} ({pct:.0%})</div></div>')
     st.markdown(f'<div class="card">{html}</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="how"><b>METHOD</b> // {c["total"]} files from {len(R.get("groups", [])) or "your"} '
+    st.markdown(f'<div class="how"><b>METHOD</b> · {c["total"]} files from {len(R.get("groups", [])) or "your"} '
                 f'group(s). Filters run in order - circulars first, then exact copies (SHA-256), then near-copies '
                 f'(text similarity and pHash for photos) - so the categories never overlap: '
                 f'{c["circulars"]} + {dups} + {c["kept"]} = {c["total"]}. Of the {c["kept"]} kept notes, '
@@ -606,7 +591,7 @@ def _ts(d):
 
 
 def page_inspector():
-    header("RESULTS // EVERY CLAIM TRACEABLE", "Cluster", "Inspector.")
+    header("", "Cluster", "Inspector.")
     if need_result():
         return
     units = R["units"]
@@ -621,7 +606,7 @@ def page_inspector():
 
     left, right = st.columns([1.15, 1], gap="large")
     with left:
-        lines = [f'<span class="k">CLUSTER INSPECTOR // {esc(row["subject_code"])} UNIT {row["unit"]} '
+        lines = [f'<span class="k">CLUSTER INSPECTOR · {esc(row["subject_code"])} UNIT {row["unit"]} '
                  f'{esc(row["title"]).upper()}</span>']
         for d in docs + review:
             who = esc(d.get("sender") or "unknown sender")
@@ -642,7 +627,7 @@ def page_inspector():
             lines.append(f'<span class="nc">[NOT COVERED]</span> {esc(", ".join(row["missing"]))} (0 pages)')
         st.markdown('<div class="chat">' + "<br>".join(lines) + "</div>", unsafe_allow_html=True)
 
-        st.markdown('<div class="kicker" style="margin-top:22px">EVIDENCE // WHERE EACH SUBTOPIC WAS FOUND</div>',
+        st.markdown('<div class="kicker" style="margin-top:22px">EVIDENCE · WHERE EACH SUBTOPIC WAS FOUND</div>',
                     unsafe_allow_html=True)
         ev = []
         for stp, srcs in row["evidence"].items():
@@ -674,7 +659,7 @@ def page_inspector():
     sc = ""
     if docs and docs[0].get("scores"):
         sc = f" + MiniLM similarity {docs[0]['scores'].get(uid, 0):.2f}"
-    st.markdown('<div class="how"><b>HOW THE MATCH WORKS</b> // page text (OCR for photos) → keyword evidence per '
+    st.markdown('<div class="how"><b>HOW THE MATCH WORKS</b> · page text (OCR for photos) → keyword evidence per '
                 f'subtopic{esc(sc)} → most evidence wins the unit → equal evidence for two units = NEEDS REVIEW. '
                 'Captions help suggest a unit but never tick a subtopic ("recovery skipped" must not count as '
                 'Recovery).</div>', unsafe_allow_html=True)
@@ -683,7 +668,7 @@ def page_inspector():
 # ====================================================================== Review & duplicates
 
 def page_review():
-    header("RESULTS // YOUR CALL, NOT OURS", "Review &", "duplicates.",
+    header("", "Review &", "duplicates.",
            "Uncertain matches and removed files are shown to you - never silently assigned or deleted.")
     if need_result():
         return
@@ -692,7 +677,7 @@ def page_review():
     fmt = lambda i: "Not in syllabus" if i == "__none__" else unit_label(ub[i])  # noqa: E731
 
     review = [d for d in R["documents"] if d.get("coverage") == "needs-review" and d.get("status") in ("kept", "unreadable")]
-    st.markdown(f'<div class="kicker">NEEDS YOUR DECISION // {len(review)}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="kicker">NEEDS YOUR DECISION · {len(review)}</div>', unsafe_allow_html=True)
     if not review:
         st.caption("Nothing to decide.")
     for d in review:
@@ -722,7 +707,7 @@ def page_review():
                     st.rerun()
 
     dups = [d for d in R["documents"] if d.get("status") in ("exact_dup", "near_dup")]
-    st.markdown(f'<div class="kicker" style="margin-top:26px">REMOVED AS DUPLICATES // {len(dups)}</div>',
+    st.markdown(f'<div class="kicker" style="margin-top:26px">REMOVED AS DUPLICATES · {len(dups)}</div>',
                 unsafe_allow_html=True)
     for d in dups:
         kept = doc_by_name(d.get("dup_of"))
@@ -749,7 +734,7 @@ def page_review():
                     st.rerun()
 
     circ = [d for d in R["documents"] if d.get("status") == "circular"]
-    st.markdown(f'<div class="kicker" style="margin-top:26px">REMOVED AS CIRCULARS // {len(circ)}</div>',
+    st.markdown(f'<div class="kicker" style="margin-top:26px">REMOVED AS CIRCULARS · {len(circ)}</div>',
                 unsafe_allow_html=True)
     for d in circ:
         with st.container(border=True):
@@ -761,7 +746,7 @@ def page_review():
 
     other = [d for d in R["documents"] if d.get("coverage") == "unmatched" and d.get("status") in ("kept", "unreadable")]
     if other:
-        st.markdown(f'<div class="kicker" style="margin-top:26px">NOT IN YOUR SYLLABUS // {len(other)}</div>',
+        st.markdown(f'<div class="kicker" style="margin-top:26px">NOT IN YOUR SYLLABUS · {len(other)}</div>',
                     unsafe_allow_html=True)
         for d in other:
             with st.container(border=True):
@@ -799,7 +784,7 @@ def _tree(root, prefix=""):
 
 
 def page_vault():
-    header("RESULTS // ONE PLACE, CLEAN NAMES", "Sorted", "vault.",
+    header("", "Sorted", "vault.",
            "Clean, renamed copies of every note, filed by subject and unit. Your originals stay where they were.")
     if need_result():
         return
@@ -813,7 +798,7 @@ def page_vault():
     if os.path.isdir(VAULT_FOLDER):
         st.markdown('<div class="tree">SlothVault/\n' + esc("\n".join(_tree(VAULT_FOLDER))) + "</div>",
                     unsafe_allow_html=True)
-    st.markdown('<div class="kicker" style="margin-top:22px">EXAM-READY PDFS // ONE PER UNIT, ORIGINAL PAGES</div>',
+    st.markdown('<div class="kicker" style="margin-top:22px">EXAM-READY PDFS · ONE PER UNIT, ORIGINAL PAGES</div>',
                 unsafe_allow_html=True)
     for u in R["units"]:
         if u.get("export_path") and os.path.exists(u["export_path"]):
@@ -823,7 +808,7 @@ def page_vault():
             with open(u["export_path"], "rb") as f:
                 b.download_button("Download PDF", f.read(), file_name=os.path.basename(u["export_path"]),
                                   mime="application/pdf", key=f"vdl-{u['unit_id']}")
-    st.markdown('<div class="how"><b>WHAT WE NEVER DO</b> // no OCR text replacing scans · no AI summaries of your notes '
+    st.markdown('<div class="how"><b>WHAT WE NEVER DO</b> · no OCR text replacing scans · no AI summaries of your notes '
                 '· no re-rendering or recompression of pages. Each merged PDF starts with a cover page listing what '
                 'is covered (with source and page) and what is missing.</div>', unsafe_allow_html=True)
 
