@@ -24,6 +24,7 @@ from pipeline import STAGES, assign_to_unit, mark_not_in_syllabus, restore_remov
 from mascot import sloth_with_bubble
 from syllabus import load_syllabus, load_syllabus_doc, save_syllabus_doc
 from syllabus_reader import SYLLABUS_TYPES, read_syllabus
+from syllabus_reader import _subject_code as subject_code
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.chdir(HERE)  # all paths in config.py are relative to the project folder
@@ -365,6 +366,42 @@ def syllabus_upload_box():
             st.rerun()
 
 
+def subject_name_boxes(rows):
+    """One 'Subject name' box per subject: type the name once and every row of that subject changes.
+    Set the name first - pressing Apply redraws the table (edits made in the table before that are reset)."""
+    subjects = list(dict.fromkeys((r["Subject code"], r["Subject name"]) for r in rows))
+    if not subjects:
+        return
+    ver = st.session_state.get("syl_ver", 0)
+    st.markdown('<div class="kicker">SUBJECT NAME</div>', unsafe_allow_html=True)
+    st.caption("Check the subject name first (before editing the table below). The short code becomes the folder name.")
+    for i, (code, name) in enumerate(subjects):
+        unknown = name.startswith("Subject ") and code.startswith("SUB")
+        c1, c2, c3 = st.columns([3, 1.3, 1])
+        new_name = c1.text_input("Subject name", value="" if unknown else name, key=f"sn_{ver}_{i}",
+                                 placeholder="Type the subject name, e.g. Computer Networks")
+        new_code = c2.text_input("Short code", value="" if unknown else code, key=f"sc_{ver}_{i}",
+                                 placeholder="e.g. CN")
+        c3.markdown("<div style='height:1.75rem'></div>", unsafe_allow_html=True)
+        if c3.button("Apply", key=f"sa_{ver}_{i}", type="primary" if unknown else "secondary"):
+            new_name = new_name.strip()
+            if not new_name:
+                st.error("Type the subject name first.")
+                return
+            new_code = (new_code.strip() or subject_code(new_name)).upper().replace(" ", "")
+            for r in rows:
+                if (r["Subject code"], r["Subject name"]) == (code, name):
+                    r["Subject code"], r["Subject name"] = new_code, new_name
+            st.session_state.syl_draft = rows
+            st.session_state.setdefault("syl_draft_info", {"summary": "your saved syllabus, with a renamed subject",
+                                                            "warnings": [], "text": ""})
+            info = st.session_state.syl_draft_info
+            info["warnings"] = [w for w in info["warnings"] if "subject name was not found" not in w]
+            info["summary"] = info["summary"].replace(f"{name} ({code})", f"{new_name} ({new_code})")
+            st.session_state.syl_ver = ver + 1
+            st.rerun()
+
+
 def clear_syllabus_draft():
     st.session_state.pop("syl_draft", None)
     st.session_state.pop("syl_draft_info", None)
@@ -383,6 +420,7 @@ def page_syllabus():
         st.markdown('<div class="note"><span class="kicker">NO SYLLABUS YET</span>Upload a photo of your syllabus '
                     'above, or type it into the table below (click <b>+</b> to add a row), then press '
                     '<b>Save syllabus</b>.</div>', unsafe_allow_html=True)
+    subject_name_boxes(rows)
     table = pd.DataFrame(rows, columns=SYL_COLUMNS)   # fixed columns, so an empty table still shows them
     edited = st.data_editor(
         table, num_rows="dynamic", hide_index=True, key=f"syl_editor_{st.session_state.get('syl_ver', 0)}", height=min(42 + 35 * (len(rows) + 2), 620),

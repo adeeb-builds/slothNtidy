@@ -11,6 +11,8 @@
   "Error Detection and Correction Techniques" at "and", generic subtopics like "Introduction" left out
 - Subject name read from a header table row ("PC303 | Computer Networks | 3L:0T:0P"); a warning when an
   uploaded image is small (screenshots misread letters) suggesting the PDF / Word file instead
+- Subject name also found when OCR drops the course code ("Computer Networks 3L:0T:0P 3 Credits")
+- New "Subject name" box above the syllabus table: type the name once, press Apply, every row updates
 
 
 ## [2026-10-30] - slothNtidy v2: the notes sorter app

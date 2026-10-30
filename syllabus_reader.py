@@ -140,6 +140,16 @@ HEADER_ROW = re.compile(r"^\W*[A-Z]{2,5}[\s\-]?\d{3,4}[A-Z]?\W+([A-Za-z][A-Za-z&
 SMALL = {"and", "of", "the", "&", "to", "in", "for", "with", "on", "a", "an"}
 
 
+COURSE_CODE = re.compile(r"^\W*[A-Z]{2,5}[\s\-]?\d{3,4}[A-Z]?\b\W*")
+LTP_CREDITS = re.compile(r"\s*[\[(|]?\s*(?:\d\s*L\b|L\s*-?\s*T\s*-?\s*P\b|\d\s*-\s*\d\s*-\s*\d\b|\d+(?:\.\d)?\s*credits?\b|"
+                         r"credits?\s*[:\-]?\s*\d).*$", re.I)
+
+
+def _strip_course_codes(line: str) -> str:
+    """'PC303 Computer Networks 3L:0T:0P 3 Credits' -> 'Computer Networks'."""
+    return LTP_CREDITS.sub("", COURSE_CODE.sub("", line)).strip()
+
+
 def _looks_like_title(line: str) -> bool:
     words = re.findall(r"[A-Za-z][A-Za-z&'-]*", line)
     return (2 <= len(words) <= 7 and "," not in line and ":" not in line and not NOT_A_TITLE.match(line)
@@ -284,7 +294,7 @@ def parse_text(text: str) -> dict:
             if hm:
                 cells = [hm.group(1)] + cells
             for cell in cells:
-                cell = cell.strip(" _—–-.")
+                cell = _strip_course_codes(cell).strip(" _—–-.")
                 if _looks_like_title(cell):
                     b.candidate = _title_case(cell)
                     break
@@ -442,5 +452,6 @@ def read_syllabus(files) -> dict:
                         "Unit / Topic table. You can still type the syllabus into the table.")
     for s in syl["subjects"]:
         if s["name"].startswith("Subject "):
-            warnings.append(f"The subject name was not found for '{s['name']}' - please type it in the table.")
+            warnings.append(f"The subject name was not found for '{s['name']}' - type it in the Subject name "
+                            "box above the table and press Apply.")
     return {"syllabus": syl, "text": text, "warnings": warnings}

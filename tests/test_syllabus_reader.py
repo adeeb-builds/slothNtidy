@@ -209,3 +209,12 @@ def test_subject_from_a_header_row_without_table_lines():
     s = to_syllabus(parse_text("PC303 Computer Networks 3L:0T:0P 3 Credits\nUnit 1: Application Layer [9 hrs]\n"
                                "The Web and HTTP; DNS.\n"))["subjects"][0]
     assert (s["code"], s["name"]) == ("CN", "Computer Networks")
+
+
+def test_subject_from_header_row_when_ocr_dropped_the_course_code():
+    # exactly what the app read from the student's second screenshot (30 Oct 2026)
+    text = ("Computer Networks 3L:0T:0P 3 Credits\nCourse Objective:\nStudents should be able to analyse simple "
+            "protocols and study literature concerning\ncomputer networks.\nDetailed contents:\n"
+            "Unit 1: Computer Networks and The Internet [9 hrs]\nWhat is the Internet; network edge.\n")
+    s = to_syllabus(parse_text(text))["subjects"][0]
+    assert (s["code"], s["name"]) == ("CN", "Computer Networks")
