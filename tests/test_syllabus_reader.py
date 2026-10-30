@@ -183,3 +183,23 @@ def test_real_syllabus_shapes():
     assert "Introduction" not in u4                                        # too generic to prove anything
     assert "Forwarding and Addressing in the Internet" in u4
     assert "Error Detection and Correction Techniques" in u5               # not split at "and"
+
+
+def test_subject_from_header_row_not_from_the_objective_paragraph():
+    text = ("|PC303_— | Computer Networks _| 3L:0T:0P [3Credits |\nCourse Objective:\n"
+            "They should be able to analyse simple protocols and study literature concerning\ncomputer networks.\n"
+            "Detailed contents:\nUnit 1: Application Layer [9 hrs]\nThe Web and HTTP; DNS.\n")
+    s = to_syllabus(parse_text(text))["subjects"][0]
+    assert (s["code"], s["name"]) == ("CN", "Computer Networks")
+
+
+@pytest.mark.skipif(not configure_tesseract(), reason="Tesseract not installed")
+def test_the_real_syllabus_screenshot():
+    """The student's own page (a small 513 px screenshot): all units found, and a warning to upload the PDF."""
+    with open(os.path.join(HERE, "fixtures", "real_syllabus_cn.png"), "rb") as f:
+        got = read_syllabus([("syllabus.png", f.read())])
+    s = got["syllabus"]["subjects"][0]
+    assert (s["code"], s["name"]) == ("CN", "Computer Networks")
+    assert [u["title"] for u in s["units"]] == ["Computer Networks and The Internet", "Application Layer",
+                                                "Transport Layer", "Network Layer", "Data Link Layer"]
+    assert any("small image" in w for w in got["warnings"])

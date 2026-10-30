@@ -9,6 +9,8 @@
 - Fixes from the first real syllabus: subject name taken from a heading line when there is no "Course Title:",
   "Unit $5" OCR noise and headings glued to the previous line, hyphenated words across lines, no splitting of
   "Error Detection and Correction Techniques" at "and", generic subtopics like "Introduction" left out
+- Subject name read from a header table row ("PC303 | Computer Networks | 3L:0T:0P"); a warning when an
+  uploaded image is small (screenshots misread letters) suggesting the PDF / Word file instead
 
 
 ## [2026-10-30] - slothNtidy v2: the notes sorter app

@@ -43,6 +43,9 @@ def _prepare(img):
     return img
 
 
+SMALL_IMAGE_WIDTH = 1000   # below this, letters are often misread (e.g. "Intemet" for "Internet")
+
+
 def _read_image(img) -> list:
     """Returns candidate texts, best reading mode first. psm 6 reads a page row by row
     (keeps table rows together); psm 4 is a fallback for unusual layouts."""
@@ -79,6 +82,14 @@ def _read_pdf(data: bytes) -> list:
                 scanned.append(_read_image(img)[0])
                 texts.append(scanned[-1])
     return ["\n".join(texts)]
+
+
+def image_width(name: str, data: bytes):
+    if os.path.splitext(name)[1].lower() not in IMAGE_TYPES:
+        return None
+    from PIL import Image, ImageOps
+    with Image.open(io.BytesIO(data)) as img:
+        return ImageOps.exif_transpose(img).width
 
 
 def read_file(name: str, data: bytes) -> list:
@@ -130,7 +141,9 @@ SMALL = {"and", "of", "the", "&", "to", "in", "for", "with", "on", "a", "an"}
 def _looks_like_title(line: str) -> bool:
     words = re.findall(r"[A-Za-z][A-Za-z&'-]*", line)
     return (2 <= len(words) <= 7 and "," not in line and ":" not in line and not NOT_A_TITLE.match(line)
-            and not re.search(r"\d{3}", line) and len(line) <= 70)
+            and not re.search(r"\d", line) and len(line) <= 70
+            and line.lstrip(" |_-")[:1].isupper()          # a heading starts with a capital letter...
+            and not line.rstrip().endswith((".", ";")))    # ...and is not the end of a sentence
 
 
 def _title_case(line: str) -> str:
@@ -261,8 +274,15 @@ def parse_text(text: str) -> dict:
         if STOP.match(line):
             b.stopped = True
             continue
-        if (b.unit is None or b.stopped) and not UNIT_WORD.match(line) and _looks_like_title(line):
-            b.candidate = _title_case(line)
+        if (b.unit is None or b.stopped) and not b.candidate and not UNIT_WORD.match(line):
+            # the first heading-like line wins; in a header row "PC303 | Computer Networks | 3L:0T:0P"
+            # each cell is tried on its own
+            cells = [c for c in re.split(r"\s*[|\[\]]\s*", line) if c.strip()] if line.count("|") >= 2 else [line]
+            for cell in cells:
+                cell = cell.strip(" _—–-.")
+                if _looks_like_title(cell):
+                    b.candidate = _title_case(cell)
+                    break
         m = UNIT_WORD.match(line)
         if m:
             _unit_from_rest(b, _num(m.group(1)), m.group(2))
@@ -397,6 +417,11 @@ def read_syllabus(files) -> dict:
     {"syllabus": {...}, "text": raw text read, "warnings": [...]}"""
     texts, warnings = [], []
     for name, data in files:
+        w = image_width(name, data)
+        if w is not None and w < SMALL_IMAGE_WIDTH:
+            warnings.append(f"{name} is a small image ({w} pixels wide), so some letters may be misread "
+                            "(e.g. 'Intemet' for 'Internet'). For an exact copy, upload your syllabus PDF or "
+                            "Word file instead, or a full-size phone photo - not a screenshot of it.")
         candidates = read_file(name, data)
         # Several readings of a photo, most faithful first. Keep the first one unless a later
         # reading finds clearly more units (2+), e.g. on an unusual two-column layout.
