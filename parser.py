@@ -15,7 +15,7 @@ from datetime import datetime
 
 import pymupdf as fitz
 
-from config import (CHAT_TYPES, IMAGE_TYPES, MIN_PAGE_TEXT, PDF_TYPES, WORK_FOLDER,
+from config import (CHAT_TYPES, IMAGE_TYPES, MAX_OCR_PAGES, MIN_PAGE_TEXT, PDF_TYPES, STICKER_PREFIX, WORK_FOLDER,
                     configure_tesseract)
 
 # Invisible characters WhatsApp sprinkles into exports. U+200E before attachment
@@ -130,6 +130,15 @@ def ocr_image(img) -> str:
         return ""
 
 
+def open_image(path: str):
+    """Opens any photo Pillow understands (jpg, png, webp, animated webp/GIF: first frame) as RGB."""
+    from PIL import Image, ImageOps
+    with Image.open(path) as img:
+        img.seek(0)
+        img = ImageOps.exif_transpose(img)
+        return img.convert("RGB")
+
+
 def ocr_page(page) -> str:
     from PIL import Image
     pix = page.get_pixmap(dpi=200)
@@ -140,8 +149,14 @@ def image_to_pdf(image_path: str, work_dir: str = WORK_FOLDER) -> str:
     """Wraps a photo in a one-page PDF (the photo itself is embedded unchanged)."""
     os.makedirs(work_dir, exist_ok=True)
     out = os.path.join(work_dir, os.path.basename(image_path) + ".pdf")
-    with fitz.open(image_path) as img:
-        pdf_bytes = img.convert_to_pdf()
+    try:
+        with fitz.open(image_path) as img:
+            pdf_bytes = img.convert_to_pdf()
+    except Exception:  # formats MuPDF cannot open (e.g. webp): convert the first frame with Pillow
+        buf = io.BytesIO()
+        open_image(image_path).save(buf, format="PNG")
+        with fitz.open("png", buf.getvalue()) as img:
+            pdf_bytes = img.convert_to_pdf()
     with fitz.open("pdf", pdf_bytes) as pdf:
         pdf.save(out)
     return out
@@ -153,21 +168,23 @@ def extract_document(path: str, chat_meta: dict = None, work_dir: str = WORK_FOL
     ext = os.path.splitext(orig_name)[1].lower()
     page_texts, ocr_used, kind = [], False, "pdf"
 
+    ocr_capped = 0
     if ext in IMAGE_TYPES:
-        from PIL import Image
         kind = "photo"
-        with Image.open(path) as img:
-            img.load()
-            text = ocr_image(img)
+        text = ocr_image(open_image(path))
         page_texts = [text]
         ocr_used = bool(text)
         pdf_path = image_to_pdf(path, work_dir)
     else:
         pdf_path = path
         with fitz.open(path) as doc:
+            ocr_pages = 0
             for page in doc:
                 t = page.get_text().strip()
-                if len(t) < MIN_PAGE_TEXT:
+                if len(t) < MIN_PAGE_TEXT and ocr_pages >= MAX_OCR_PAGES:
+                    ocr_capped += 1          # long scanned PDF: the first pages are enough to place it
+                elif len(t) < MIN_PAGE_TEXT:
+                    ocr_pages += 1
                     o = ocr_page(page)
                     if o:
                         ocr_used, t = True, o
@@ -187,6 +204,7 @@ def extract_document(path: str, chat_meta: dict = None, work_dir: str = WORK_FOL
         "text": body,
         "chars": len(body),
         "ocr_used": ocr_used,
+        "ocr_capped": ocr_capped,   # scanned pages not OCR-read (beyond MAX_OCR_PAGES)
         "sender": info.get("sender", ""),
         "timestamp": info.get("timestamp", ""),
         "date": info.get("date", ""),
@@ -202,7 +220,7 @@ def extract_pdf(path: str, chat_meta: dict = None) -> dict:
 
 # ---------------------------------------------------------------- scanning the inbox
 
-def unzip_exports(inbox: str, log=print):
+def unzip_exports(inbox: str, log=print, skip=()):
     """WhatsApp 'Export chat -> Attach media' gives a .zip. Unpack each into its own folder."""
     import zipfile
     for root, _, files in os.walk(inbox):
@@ -210,7 +228,7 @@ def unzip_exports(inbox: str, log=print):
             if f.lower().endswith(".zip"):
                 zpath = os.path.join(root, f)
                 target = os.path.join(root, os.path.splitext(f)[0])
-                if os.path.isdir(target):
+                if os.path.isdir(target) or target in skip:
                     continue
                 try:
                     with zipfile.ZipFile(zpath) as z:
@@ -220,13 +238,47 @@ def unzip_exports(inbox: str, log=print):
                     log(f"   [SKIP] {f}: not a valid zip")
 
 
+_HASHES = {}
+
+
+def file_hash(path: str) -> str:
+    """SHA-256 of a file, remembered per (path, size, modified time) so big zips are hashed once."""
+    import hashlib
+    st = os.stat(path)
+    key = (os.path.abspath(path), st.st_size, st.st_mtime)
+    if key in _HASHES:
+        return _HASHES[key]
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    _HASHES[key] = h.hexdigest()
+    return _HASHES[key]
+
+
+def duplicate_export_folders(inbox: str, log=print) -> set:
+    """The same WhatsApp .zip added twice: read only the first copy (folders of later copies are ignored)."""
+    seen, ignore = {}, set()
+    zips = sorted(os.path.join(r, f) for r, _, fs in os.walk(inbox) for f in fs if f.lower().endswith(".zip"))
+    for z in zips:
+        key = (os.path.getsize(z), file_hash(z))
+        if key in seen:
+            ignore.add(os.path.splitext(z)[0])
+            log(f"   [SKIP] {os.path.basename(z)}: same export as one already in the inbox")
+        else:
+            seen[key] = z
+    return ignore
+
+
 def scan_inbox(inbox: str, log=print):
     """Finds chat exports and notes. A chat file describes the media in the same folder.
     Returns (files, chat_meta_by_folder, skipped)."""
-    unzip_exports(inbox, log)
+    ignore = duplicate_export_folders(inbox, log)
+    unzip_exports(inbox, log, skip=ignore)
     files, skipped, meta_by_folder = [], [], {}
     for root, dirs, names in os.walk(inbox):
         dirs.sort()
+        dirs[:] = [d for d in dirs if os.path.join(root, d) not in ignore]
         folder_meta = {}
         for n in sorted(names):
             if n.lower().endswith(CHAT_TYPES):
@@ -234,7 +286,9 @@ def scan_inbox(inbox: str, log=print):
         meta_by_folder[root] = folder_meta
         for n in sorted(names):
             low = n.lower()
-            if low.endswith(PDF_TYPES + IMAGE_TYPES):
+            if n.startswith(STICKER_PREFIX) and low.endswith(IMAGE_TYPES):
+                skipped.append(os.path.join(root, n))      # WhatsApp sticker, never a note
+            elif low.endswith(PDF_TYPES + IMAGE_TYPES):
                 files.append(os.path.join(root, n))
             elif not low.endswith(CHAT_TYPES + (".zip",)) and not n.startswith("."):
                 skipped.append(os.path.join(root, n))

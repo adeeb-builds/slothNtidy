@@ -13,13 +13,15 @@ import os
 import shutil
 import time
 
-from config import (INBOX_FOLDER, OUTPUT_FOLDER, SYLLABUS_FILE, TOPIC_FOLDER, VAULT_FOLDER,
-                    WORK_FOLDER, configure_tesseract)
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from config import (IMAGE_TYPES, INBOX_FOLDER, OUTPUT_FOLDER, PARSE_WORKERS, SYLLABUS_FILE, TOPIC_FOLDER,
+                    VAULT_FOLDER, WORK_FOLDER, configure_tesseract)
 from exporter import export_units
 from filing import file_notes
 from filters import clean
 from matcher import match, total_hits, unit_coverage
-from parser import extract_document, scan_inbox
+from parser import extract_document, file_hash, scan_inbox
 from report import build_report
 from syllabus import load_syllabus
 
@@ -34,9 +36,60 @@ def _reset_output(log):
         os.makedirs(p, exist_ok=True)
 
 
+def _read_all(files, meta_by_folder, step, log):
+    """Reads every file, several at a time. Identical files (same bytes, e.g. the same PDF shared in two
+    groups) are read once. A file that cannot be opened is reported and skipped - it never stops the run."""
+    by_hash, first_of = {}, {}
+    for path in files:
+        try:
+            h = file_hash(path)
+        except OSError:
+            h = path
+        first_of[path] = by_hash.setdefault(h, path)
+    unique = list(by_hash.values())
+    if PARSE_WORKERS > 1:
+        os.environ.setdefault("OMP_THREAD_LIMIT", "1")   # one core per Tesseract, files run side by side
+    read, failed = {}, []
+
+    def work(path):
+        return extract_document(path, meta_by_folder.get(os.path.dirname(path), {}))
+
+    with ThreadPoolExecutor(max_workers=PARSE_WORKERS) as pool:
+        futures = {pool.submit(work, p): p for p in unique}
+        for n, fut in enumerate(as_completed(futures), 1):
+            path = futures[fut]
+            step(1, "Parse", n, len(unique), os.path.basename(path))
+            try:
+                read[path] = fut.result()
+            except Exception as e:  # damaged / unsupported file
+                failed.append({"name": os.path.basename(path), "path": path, "reason": f"{type(e).__name__}: {e}"[:200]})
+                log(f"   [SKIP] {os.path.basename(path)}: could not be read ({type(e).__name__})")
+    docs = []
+    for path in files:                      # keep the inbox order; copies reuse the text of the first copy
+        src = read.get(first_of[path])
+        if src is None:
+            if first_of[path] != path:
+                failed.append({"name": os.path.basename(path), "path": path, "reason": "same file as one that could not be read"})
+            continue
+        if first_of[path] == path:
+            d = src
+        else:
+            info = meta_by_folder.get(os.path.dirname(path), {}).get(os.path.basename(path), {})
+            d = dict(src, path=path, pdf_path=path if src["pdf_path"] == src["path"] else src["pdf_path"],
+                     orig_name=os.path.basename(path), sender=info.get("sender", ""),
+                     timestamp=info.get("timestamp", ""), date=info.get("date", ""),
+                     group=info.get("group", ""), caption=info.get("caption", ""),
+                     page_texts=list(src["page_texts"]))
+        docs.append(d)
+        log(f"   [READ] {d['orig_name']}: {d['pages']} page(s), {d['chars']} chars"
+            + (" (OCR)" if d["ocr_used"] else "") + (f" - caption: \"{d['caption']}\"" if d["caption"] else ""))
+    return docs, failed
+
+
 def run(inbox: str = INBOX_FOLDER, syllabus_path: str = SYLLABUS_FILE, embedder=None,
-        progress=None, log=print) -> dict:
-    """progress(stage_index, stage_name, done, total, message) is called as work happens."""
+        progress=None, log=print, read_photos: bool = True) -> dict:
+    """progress(stage_index, stage_name, done, total, message) is called as work happens.
+    read_photos=False skips photos (only PDFs are read) - much faster on big groups."""
     t0 = time.time()
     step = progress or (lambda *a: None)
     units = load_syllabus(syllabus_path)
@@ -52,19 +105,20 @@ def run(inbox: str = INBOX_FOLDER, syllabus_path: str = SYLLABUS_FILE, embedder=
         files += f
         meta_by_folder.update(m)
         skipped += s
+    photos_off = []
+    if not read_photos:
+        photos_off = [f for f in files if f.lower().endswith(IMAGE_TYPES)]
+        files = [f for f in files if not f.lower().endswith(IMAGE_TYPES)]
+        log(f"   photos switched off: {len(photos_off)} photo(s) not read")
     chats = sum(1 for m in meta_by_folder.values() if m)
     log(f"   {len(files)} file(s), {chats} chat export(s), {len(skipped)} unsupported file(s) skipped")
     if not files:
         raise FileNotFoundError(f"No PDFs or photos found in {', '.join(roots)}")
 
     log("\n[2 PARSE] reading every note" + ("" if ocr_ok else " (Tesseract not found: photos cannot be read)"))
-    docs = []
-    for i, path in enumerate(files):
-        step(1, "Parse", i, len(files), os.path.basename(path))
-        docs.append(extract_document(path, meta_by_folder.get(os.path.dirname(path), {})))
-        d = docs[-1]
-        log(f"   [READ] {d['orig_name']}: {d['pages']} page(s), {d['chars']} chars"
-            + (" (OCR)" if d["ocr_used"] else "") + (f" - caption: \"{d['caption']}\"" if d["caption"] else ""))
+    docs, failed = _read_all(files, meta_by_folder, step, log)
+    if not docs:
+        raise FileNotFoundError("None of the files in the inbox could be read.")
 
     step(2, "Clean", 0, 1, "Removing circulars and duplicates")
     log("\n[3 CLEAN] circulars, duplicates, noise")
@@ -96,6 +150,8 @@ def run(inbox: str = INBOX_FOLDER, syllabus_path: str = SYLLABUS_FILE, embedder=
         "chats": chats,
         "groups": sorted({d["group"] for d in docs if d.get("group")}),
         "skipped": skipped,
+        "failed": failed,               # files that could not be opened (listed, never stop the run)
+        "photos_off": len(photos_off),  # photos not read because "Read photos" was switched off
         "units": rows,
         "documents": docs,
         "seconds": round(time.time() - t0, 1),

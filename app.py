@@ -3,6 +3,7 @@
 Everything runs on this laptop. No notes, names or phone numbers leave the machine.
 """
 import base64
+import hashlib
 import io
 import json
 import os
@@ -19,7 +20,7 @@ import streamlit as st
 from config import (INBOX_FOLDER, OUTPUT_FOLDER, REPORT_JSON, REPORT_MD, SYLLABUS_FILE,
                     VAULT_FOLDER, configure_tesseract)
 from embedder import load_embedder
-from parser import scan_inbox
+from parser import file_hash, scan_inbox
 from pipeline import STAGES, assign_to_unit, mark_not_in_syllabus, restore_removed, run
 from mascot import sloth_with_bubble
 from syllabus import load_syllabus, load_syllabus_doc, save_syllabus_doc
@@ -460,6 +461,17 @@ def page_syllabus():
 
 # ====================================================================== 2 · Import
 
+def _uploaded_files():
+    """Files added on this page (zips and loose files), not the folders unpacked from zips."""
+    out = []
+    if os.path.isdir(INBOX_FOLDER):
+        for batch in os.listdir(INBOX_FOLDER):
+            b = os.path.join(INBOX_FOLDER, batch)
+            if os.path.isdir(b):
+                out += [os.path.join(b, f) for f in os.listdir(b) if os.path.isfile(os.path.join(b, f))]
+    return out
+
+
 def _inbox_table(roots):
     rows = []
     for root in roots:
@@ -489,13 +501,25 @@ def page_import():
     ups = st.file_uploader("Drop WhatsApp export .zip files, chat .txt files, PDFs or photos",
                            accept_multiple_files=True, type=["zip", "txt", "pdf", "jpg", "jpeg", "png", "webp"])
     if ups and st.button(f"Add {len(ups)} file(s) to the inbox", type="primary"):
-        batch = os.path.join(INBOX_FOLDER, time.strftime("upload-%Y%m%d-%H%M%S"))
-        os.makedirs(batch, exist_ok=True)
-        for u in ups:  # one folder per upload, so a chat .txt pairs with the media uploaded with it
-            with open(os.path.join(batch, os.path.basename(u.name)), "wb") as f:
-                f.write(u.getbuffer())
-        st.success(f"Added {len(ups)} file(s). Zips are unpacked automatically when you sort.")
-        time.sleep(0.6)
+        # a file already in the inbox (same bytes) is not added again - sorting it twice only costs time
+        have = {(os.path.getsize(p), file_hash(p)) for p in _uploaded_files()}
+        new, again = [], []
+        for u in ups:
+            data = u.getbuffer()
+            key = (len(data), hashlib.sha256(data).hexdigest())
+            (again if key in have else new).append(u)
+            have.add(key)
+        if new:
+            batch = os.path.join(INBOX_FOLDER, time.strftime("upload-%Y%m%d-%H%M%S"))
+            os.makedirs(batch, exist_ok=True)
+            for u in new:  # one folder per upload, so a chat .txt pairs with the media uploaded with it
+                with open(os.path.join(batch, os.path.basename(u.name)), "wb") as f:
+                    f.write(u.getbuffer())
+        msg = f"Added {len(new)} file(s). Zips are unpacked automatically when you sort."
+        if again:
+            msg += f" Not added again (already in the inbox): {', '.join(u.name for u in again)}."
+        st.success(msg)
+        time.sleep(1.5 if again else 0.6)
         st.rerun()
 
     rows = _inbox_table([INBOX_FOLDER])
@@ -542,6 +566,9 @@ def page_sort():
         + "</div>", unsafe_allow_html=True)
     bar = st.empty()
     bar.markdown(stagebar(), unsafe_allow_html=True)
+    read_photos = st.toggle("Read photos too", value=st.session_state.get("read_photos", True), key="read_photos",
+                            help="Photos (handwritten notes, board pictures) are read with OCR, which takes a few "
+                                 "seconds each. Switch off to sort only the PDFs - much faster on a big group.")
     if not st.button("Sort my notes", type="primary", disabled=n == 0 or n_units == 0):
         if n_units == 0:
             st.caption("Add your syllabus first - go to 1 · Syllabus and upload a photo of it.")
@@ -564,7 +591,7 @@ def page_sort():
         prog.progress(min(frac, 1.0), text=f"Stage {i + 1} · {name}: {msg}")
 
     try:
-        result = run(roots, SYLLABUS_FILE, embedder, progress=progress, log=log)
+        result = run(roots, SYLLABUS_FILE, embedder, progress=progress, log=log, read_photos=read_photos)
     except FileNotFoundError as e:
         st.error(str(e))
         return
@@ -596,6 +623,11 @@ def page_coverage():
     header("", "Coverage", "Dashboard.")
     if need_result():
         return
+    if R.get("failed"):
+        st.warning(f"{len(R['failed'])} file(s) could not be opened and were skipped (damaged or unusual format): "
+                   + ", ".join(f["name"] for f in R["failed"][:8]) + (" ..." if len(R["failed"]) > 8 else ""))
+    if R.get("photos_off"):
+        st.info(f"{R['photos_off']} photo(s) were not read because \"Read photos too\" was switched off on the Sort page.")
     c, units = R["counts"], R["units"]
     ready = sum(u["status"] == "READY" for u in units)
     missing = sum(u["status"] == "MISSING" for u in units)

@@ -64,12 +64,51 @@ def is_circular(text: str, filename: str = "", syllabus_hits: int = 0) -> bool:
     return score >= CIRCULAR_MIN_SIGNALS and syllabus_hits <= CIRCULAR_MAX_SYLLABUS_HITS
 
 
-def text_ratio(a: str, b: str) -> float:
-    a, b = " ".join(a.lower().split()), " ".join(b.lower().split())
+def _norm_head(text: str) -> str:
+    return " ".join(text.lower().split())
+
+
+def text_ratio(a: str, b: str, need: float = 0.0) -> float:
+    """Similarity (0-1) of the first 2000 characters. With need=..., pairs that cannot reach it are
+    rejected by two fast upper bounds first, so the slow exact comparison only runs on likely
+    duplicates (same decisions, a fraction of the time on a big group)."""
+    a, b = _norm_head(a), _norm_head(b)
     n = min(len(a), len(b), 2000)
     if n < 150:
         return 0.0
-    return SequenceMatcher(None, a[:n], b[:n], autojunk=False).ratio()
+    a, b = a[:n], b[:n]
+    if need and _shingle_overlap(a, b) < SHINGLE_GATE:
+        return 0.0          # hardly any 3-word phrases in common: cannot be the same notes
+    sm = SequenceMatcher(None, a, b, autojunk=False)
+    if need:
+        for bound in (sm.real_quick_ratio, sm.quick_ratio):
+            r = bound()
+            if r < need:
+                return r
+    return sm.ratio()
+
+
+SHINGLE_GATE = 0.15   # share of 3-word phrases two texts must have in common before the exact comparison
+_SHINGLES = {}
+
+
+def _shingles(t: str) -> frozenset:
+    got = _SHINGLES.get(t)
+    if got is None:
+        if len(_SHINGLES) >= 5000:      # keep memory bounded on very large inboxes
+            _SHINGLES.clear()
+        w = t.split()
+        got = _SHINGLES[t] = frozenset(zip(w, w[1:], w[2:]))
+    return got
+
+
+def _shingle_overlap(a: str, b: str) -> float:
+    """Share of the smaller text's 3-word phrases that also appear in the other text (0-1).
+    Two copies of the same notes share most of them; different notes almost none."""
+    sa, sb = _shingles(a), _shingles(b)
+    if not sa or not sb:
+        return 1.0          # too short to judge: let the exact comparison decide
+    return len(sa & sb) / min(len(sa), len(sb))
 
 
 def _fuller(a: dict, b: dict) -> dict:
@@ -135,7 +174,7 @@ def clean(docs: list, syllabus_hits=None, log=print):
                     match, reason = s, (f"Same page photographed again (image fingerprint pHash "
                                         f"distance {dist} of 64)")
                     break
-            ratio = text_ratio(d["text"], s["text"])
+            ratio = text_ratio(d["text"], s["text"], need=DUP_TEXT_RATIO)
             if ratio >= DUP_TEXT_RATIO:
                 match, reason = s, f"Same notes: {ratio:.0%} of the text matches"
                 break

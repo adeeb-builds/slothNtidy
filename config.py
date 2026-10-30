@@ -19,6 +19,10 @@ IMAGE_TYPES = (".jpg", ".jpeg", ".png", ".webp")
 CHAT_TYPES = (".txt",)
 
 # ---------------------------------------------------------------- reading
+MAX_OCR_PAGES = 10            # a scanned PDF is OCR-read up to this many pages (enough to place it in a unit);
+                              # the merged unit PDF still contains every page
+PARSE_WORKERS = max(1, min(4, (os.cpu_count() or 2) - 1))   # files read at the same time
+STICKER_PREFIX = "STK-"       # WhatsApp names stickers STK-<date>-WA<n>.webp - never notes
 MIN_PAGE_TEXT = 30            # a PDF page with fewer characters than this is treated as a scan -> OCR
 MIN_TEXT_CHARS = 60           # a document with less readable text than this is flagged "unreadable"
 

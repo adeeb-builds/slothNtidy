@@ -1,3 +1,14 @@
+## [2026-10-30] - Real WhatsApp exports: no crashes, much faster
+Tested on two real class exports (184 files, 125 PDFs, 307 scanned pages, 60 photos):
+- WhatsApp stickers (STK-*.webp) are skipped; .webp photos now open (converted with Pillow)
+- One damaged or unsupported file no longer stops the sort: it is listed on the dashboard and skipped
+- The same zip added twice is read once (the Import page also refuses a file already in the inbox)
+- Identical files shared in several groups are read once
+- Scanned PDFs: only the first 10 pages are OCR-read (enough to place them; merged PDFs keep every page)
+- Files are read several at a time (up to 4, depending on the laptop's cores)
+- Near-duplicate check: a 3-word-phrase pre-check before the exact comparison (Clean 136 s -> 16 s)
+- "Read photos too" switch on the Sort page: off = PDFs only, much faster on big groups
+
 ## [2026-10-30] - Syllabus from a photo, no built-in demo
 - The app now starts empty: the sample syllabus and sample class groups are gone from the app (they live on in
   tests/demo_data for the automated tests only). Your syllabus is saved to my_syllabus.json; old demo results are ignored
