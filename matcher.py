@@ -21,12 +21,20 @@ Outcome per document:
 import re
 
 from config import EMBED_SUGGEST, WEIGHT_KEYWORDS
+
+GENERIC_TITLES = {"introduction", "miscellaneous", "basics", "overview", "fundamentals", "applications",
+                  "advanced topics", "case studies", "revision"}
+MIN_TOPICS = 2    # a note is sorted into a unit only with 2+ different syllabus topics found on its pages
+                  # (or a unit heading); a single hit is a suggestion at most
 from embedder import cosine
 from syllabus import norm
 
 
 def _phrase_regex(phrase: str):
-    # whole words, optional plural "s": "banker" matches "bankers" but "scan" does not match "scanned"
+    # whole words, plural "s" optional both ways: "banker" matches "bankers", "feature sets" matches
+    # "feature set" - but "scan" does not match "scanned"
+    if len(phrase) > 4 and phrase.endswith("s") and not phrase.endswith("ss"):
+        phrase = phrase[:-1]
     return re.compile(r"\b" + re.escape(phrase) + r"s?\b")
 
 
@@ -67,11 +75,49 @@ def caption_units(doc: dict, units: list) -> list:
     found = []
     for u in units:
         title = norm(u["title"])
+        if title in GENERIC_TITLES:     # "Introduction" in a file name says nothing about which subject
+            title = ""
         named = (title and _has(title, words)) or any(
             _has(ph, words) for st in u["subtopics"] for ph in st["phrases"])
         if named:
             found.append(u["id"])
     return found
+
+
+ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10}
+UNIT_HEADING = re.compile(r"\b(?:unit|module)\s*(\d{1,2}|i{1,3}|iv|v|vi{1,3}|ix|x)\b")
+
+
+def subject_mentioned(doc: dict, subject_name: str, subject_code: str = "") -> bool:
+    """The subject's name (or code) appears in the file name, caption or text: 'Machine Learning'."""
+    hay = norm(" ".join([doc.get("orig_name", ""), doc.get("caption", ""), doc.get("text", "")[:20000]]))
+    name = norm(subject_name)
+    name = re.sub(r"^(?:introduction to|intro to|fundamentals of|basics of|principles of)\s+", "", name)
+    name = re.sub(r"s$", "", name)            # "computer networks" also matches "computer network"
+    if name and _has(name, hay):
+        return True
+    code = norm(subject_code)
+    return len(code) >= 2 and bool(re.search(r"\b" + re.escape(code) + r"\b", hay))
+
+
+def heading_unit(doc: dict, units: list):
+    """A unit heading at the top of page 1 or in the file name - 'UNIT 2 : BASICS OF MACHINE LEARNING',
+    'Unit 3- Machine Learning.pdf' - names the unit, if the subject is also named there or the unit title is."""
+    first = norm((doc.get("page_texts") or [doc.get("text", "")])[0][:400])
+    name = norm(doc.get("orig_name", "").rsplit(".", 1)[0])
+    for where in (name, first):
+        m = UNIT_HEADING.search(where)
+        if not m:
+            continue
+        n = int(m.group(1)) if m.group(1).isdigit() else ROMAN.get(m.group(1))
+        for u in units:
+            if u["unit"] != n:
+                continue
+            title = norm(u["title"])
+            if (title and _has(title, first + " " + name)) or subject_mentioned(
+                    {"orig_name": doc.get("orig_name", ""), "text": first}, u["subject_name"], u["subject_code"]):
+                return u["id"], m.group(0)
+    return None, ""
 
 
 def unit_profile(u: dict) -> str:
@@ -105,19 +151,38 @@ def match(docs: list, units: list, embedder=None, log=print) -> list:
             return (n, combined)
 
         ranked = sorted(by_id, key=rank, reverse=True)
+        head_id, head_text = heading_unit(d, units)
         best = ranked[0] if ranked else None
         second = ranked[1] if len(ranked) > 1 else None
         n_best = len(d["hits"].get(best, {})) if best else 0
         n_second = len(d["hits"].get(second, {})) if second else 0
         d["unit_id"], d["suggested_unit_id"], d["reason"] = None, None, ""
 
-        if n_best and n_best == n_second:
+        on_subject = bool(best) and subject_mentioned(d, by_id[best]["subject_name"], by_id[best]["subject_code"])
+        if head_id:
+            d["coverage"] = "sorted"
+            d["unit_id"] = head_id
+            subs = ", ".join(f"{k} (p.{','.join(map(str, v))})" for k, v in d["hits"].get(head_id, {}).items())
+            d["reason"] = f'Unit heading "{head_text}" on the first page / in the file name' + (
+                f"; found on the page: {subs}" if subs else "")
+        elif n_best and n_best < MIN_TOPICS and not on_subject:
+            n_best = 0      # at most one topic per unit and the subject never named (a Python book that says
+                            # "recall" once and "hierarchical" once): stray words, not notes for this subject
+            d["hits"] = {}
+        if head_id:
+            pass
+        elif n_best and n_best == n_second:
             d["coverage"] = "needs-review"
             d["suggested_unit_id"] = best
             d["candidates"] = [best, second]
             d["reason"] = (f"Fits two units equally: {by_id[best]['subject_code']} U{by_id[best]['unit']} "
                            f"{by_id[best]['title']} and {by_id[second]['subject_code']} U{by_id[second]['unit']} "
                            f"{by_id[second]['title']} - you decide")
+        elif n_best and n_best < MIN_TOPICS and not n_second:
+            d["coverage"] = "needs-review"
+            d["suggested_unit_id"] = best
+            d["reason"] = (f"Mentions {by_id[best]['subject_name']} but only one syllabus topic "
+                           f"({next(iter(d['hits'][best]))}) - please confirm")
         elif n_best:
             d["coverage"] = "sorted"
             d["unit_id"] = best

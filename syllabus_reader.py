@@ -131,7 +131,8 @@ PAGE_HEADER = re.compile(r"\b(?:university|vishwavidyalaya|institute of|college 
                          r"page\s+\d|effective from|session\s*20\d\d|academic year)\b", re.I)
 JUNK_NUMERAL = re.compile(r"^[ivxl|1]{1,4}[\s.)|]+(?=[A-Z])", re.I)
 GENERIC = {"introduction", "overview", "basics", "basic concepts", "summary", "conclusion", "review",
-           "revision", "applications", "examples", "case study", "case studies"}
+           "revision", "applications", "examples", "case study", "case studies", "test", "tests", "train",
+           "training", "testing", "types", "definition", "definitions"}
 NOT_A_TITLE = re.compile(r"^\W*(?:unit|units|topics?|contents?|hours?|hrs|lectures?|s\.?\s?no|sr\.?\s?no|syllabus|"
                          r"course\s+code|subject\s+code|paper\s+code|max|marks|credits?|l\s*-?\s*t\s*-?\s*p|"
                          r"proposed|no\.? of)\b", re.I)
@@ -370,8 +371,13 @@ def _tidy(item: str) -> str:
 def split_subtopics(body: str) -> list:
     items, seen = [], set()
     for part in _split_top(body, ",;:"):
+        part = re.sub(r"\.\s+(?=[A-Z])", ", ", part)          # "PCA, LDA, ICA. Introduction to Deep Learning"
         # "LRU and FIFO" -> two subtopics; "Error Detection and Correction Techniques" stays one
         part = re.sub(r"^(\s*[A-Z][\w/+-]*)\s+(?:and|&)\s+([A-Z][\w/+-]*\s*)$", r"\1, \2", part)
+        # "Unsupervised Learning and Reinforcement Learning" (same last word) -> two subtopics
+        m = re.match(r"^\s*(.+?\s(\w+))\s+(?:and|&)\s+(.+?\s(\w+))\s*$", part)
+        if m and m.group(2).lower() == m.group(4).lower() and "," not in part:
+            part = f"{m.group(1)}, {m.group(3)}"
         for sub in _split_top(part, ","):
             sub = _tidy(sub)
             if len(sub) < 2 or sub.isdigit() or not re.search(r"[A-Za-z]", sub):

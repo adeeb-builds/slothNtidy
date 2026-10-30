@@ -102,7 +102,8 @@ def test_subtopics_need_page_evidence_not_captions(tmp_path):
 
 
 def test_equal_evidence_for_two_units_goes_to_review(tmp_path):
-    p = make_pdf(tmp_path, "x.pdf", "Two phase locking can cause deadlocks. Deadlock prevention: wait-die. " * 2)
+    p = make_pdf(tmp_path, "x.pdf", "Two phase locking keeps transactions serializable but can cause deadlocks. "
+                                    "Deadlock prevention (wait-die) and the bankers algorithm avoid them. " * 2)
     d = extract_pdf(p)
     match([d], UNITS, None, log=lambda *x: None)
     assert d["coverage"] == "needs-review" and set(d["candidates"]) == {"OS-U2", "DBMS-U4"}

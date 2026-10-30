@@ -140,3 +140,39 @@ def test_phrase_cache_survives_more_texts_than_it_keeps():
     for i in range(5100):   # more texts than the cache holds: must not lose the one being compared
         filters._shingles(f"note number {i} about routing and switching in networks")
     assert text_ratio("routing algorithms " * 40, "routing algorithms " * 40, need=0.8) == 1.0
+
+
+# ---------------------------------------------------------------- matching lessons from the real ML run
+from matcher import match as _match  # noqa: E402
+from syllabus import flatten as _flatten  # noqa: E402
+
+_ML = _flatten({"subjects": [{"code": "ML", "name": "Introduction to Machine Learning", "units": [
+    {"unit": 3, "title": "Supervised learning", "subtopics": [{"name": n, "keywords": []} for n in
+                                                              ("Classification", "Regression", "recall", "precision")]},
+    {"unit": 4, "title": "Unsupervised learning", "subtopics": [{"name": n, "keywords": []} for n in
+                                                                ("Hierarchical", "K-means clustering")]}]}]})
+
+
+def _doc(name, *pages):
+    return {"orig_name": name, "page_texts": list(pages), "text": "\n".join(pages), "chars": 999, "caption": ""}
+
+
+def test_stray_words_in_a_file_about_something_else_are_ignored():
+    d = _doc("Inheritance.pdf", "Inheritance in C++: a class hierarchy is hierarchical. Students must recall it.")
+    _match([d], _ML, None, log=lambda *a: None)
+    assert d["coverage"] == "unmatched"
+
+
+def test_unit_heading_on_page_one_sorts_the_notes():
+    d = _doc("UNIT 2- MACHINE LEARNING.pdf", "UNIT 3 : SUPERVISED LEARNING\n1. Classification and regression",
+             "Unsupervised: k-means clustering and hierarchical clustering compared with classification.")
+    _match([d], _ML, None, log=lambda *a: None)
+    assert d["coverage"] == "sorted" and d["unit_id"] == "ML-U3"
+
+
+def test_plural_and_singular_both_match():
+    units = _flatten({"subjects": [{"code": "ML", "name": "Machine Learning", "units": [{"unit": 1, "title": "Intro",
+                     "subtopics": [{"name": "Feature sets", "keywords": []}, {"name": "Datasets", "keywords": []}]}]}]})
+    d = _doc("ml.pdf", "A feature set is the collection of features; every dataset is split.")
+    _match([d], units, None, log=lambda *a: None)
+    assert set(d["hits"]["ML-U1"]) == {"Feature sets", "Datasets"}

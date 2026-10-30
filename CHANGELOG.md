@@ -1,3 +1,14 @@
+## [2026-10-30] - Matching tuned on real class notes (Machine Learning)
+- A note is sorted into a unit only with 2+ different syllabus topics on its pages, or a unit heading
+  ("UNIT 2 : BASICS OF MACHINE LEARNING" on page 1, "Unit 3- Machine Learning.pdf"); one topic = suggestion
+- Files that never name the subject and have one stray topic per unit are ignored (a Python book that says
+  "recall" once no longer lands in Supervised Learning)
+- Generic unit titles ("Introduction", "Miscellaneous") no longer match file names
+- Plurals match both ways ("feature sets" <-> "feature set")
+- Syllabus reader: splits "PCA, LDA, ICA. Introduction to Deep Learning" and "Unsupervised Learning and
+  Reinforcement Learning"; leaves out "test" / "train" as subtopics
+- Result on the real BTech CSE group: ML Units 1, 2, 3, 5 sorted from the teacher's notes, Unit 4 MISSING
+
 ## [2026-10-30] - Real WhatsApp exports: no crashes, much faster
 Tested on two real class exports (184 files, 125 PDFs, 307 scanned pages, 60 photos):
 - WhatsApp stickers (STK-*.webp) are skipped; .webp photos now open (converted with Pillow)
