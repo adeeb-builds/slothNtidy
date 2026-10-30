@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import (IMAGE_TYPES, INBOX_FOLDER, OUTPUT_FOLDER, PARSE_WORKERS, SYLLABUS_FILE, TOPIC_FOLDER,
                     VAULT_FOLDER, WORK_FOLDER, configure_tesseract)
-from exporter import export_units
+from exporter import PACK_FOLDER_NAME, export_subject_packs, export_units
 from filing import file_notes
 from filters import clean
 from matcher import match, total_hits, unit_coverage
@@ -138,8 +138,10 @@ def run(inbox: str = INBOX_FOLDER, syllabus_path: str = SYLLABUS_FILE, embedder=
     exported = export_units(kept, rows, log=log)
     for r in rows:
         r["export_path"] = exported.get(r["unit_id"])
+    packs = export_subject_packs(kept, rows, log=log)
 
     result = {
+        "subject_packs": packs,         # {subject_code: one exam-pack PDF for the whole subject}
         "inbox": [os.path.abspath(r) for r in roots],
         "engine": embedder.name if embedder else "Keyword evidence only (no embedding model installed)",
         "ocr": ocr_ok,
@@ -181,12 +183,15 @@ def _refresh(result: dict, log=print):
     result["match_counts"] = {k: sum(1 for d in kept if d.get("coverage") == k)
                               for k in ("sorted", "needs-review", "unmatched")}
     rows = unit_coverage(kept, units)
-    if os.path.isdir(TOPIC_FOLDER):
-        shutil.rmtree(TOPIC_FOLDER)
+    pack_dir = os.path.join(os.path.dirname(TOPIC_FOLDER.rstrip("/\\")), PACK_FOLDER_NAME)
+    for folder in (TOPIC_FOLDER, pack_dir):
+        if os.path.isdir(folder):
+            shutil.rmtree(folder)
     exported = export_units(kept, rows, log=log)
     for r in rows:
         r["export_path"] = exported.get(r["unit_id"])
     result["units"] = rows
+    result["subject_packs"] = export_subject_packs(kept, rows, log=log)
     build_report(result, log=log)
 
 

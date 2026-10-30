@@ -1,3 +1,13 @@
+## [2026-10-30] - Exam pack: one PDF per subject
+- New "Download exam pack" on the Coverage dashboard and Sorted vault pages: one PDF per subject
+- Subject cover page: every unit with its status and starting page
+- Before each unit a divider page: the notes in it (with sender/group), and a TOPIC INDEX listing every page
+  in the pack where each topic appears - including pages in other units' notes, so overlapping explanations
+  can be read together; topics found nowhere are marked "ask your class"
+- Units without notes get a red divider listing what to ask for
+- Bookmarks: subject -> unit -> note; note pages are the originals, unchanged
+- Per-unit PDFs are still made as before
+
 ## [2026-10-30] - Matching tuned on real class notes (Machine Learning)
 - A note is sorted into a unit only with 2+ different syllabus topics on its pages, or a unit heading
   ("UNIT 2 : BASICS OF MACHINE LEARNING" on page 1, "Unit 3- Machine Learning.pdf"); one topic = suggestion

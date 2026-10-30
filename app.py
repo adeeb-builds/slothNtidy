@@ -614,6 +614,26 @@ def page_sort():
 
 # ====================================================================== Coverage dashboard (deck slide 8)
 
+def pack_buttons(where):
+    """One 'exam pack' download per subject: all units in order, a divider + topic index before each unit."""
+    packs = {k: v for k, v in (R.get("subject_packs") or {}).items() if v and os.path.exists(v)}
+    if not packs:
+        return
+    st.markdown('<div class="kicker" style="margin-top:22px">EXAM PACK · ONE PDF PER SUBJECT, UNIT BY UNIT</div>',
+                unsafe_allow_html=True)
+    names = {u["subject_code"]: u["subject_name"] for u in R["units"]}
+    for code, path in packs.items():
+        a, b = st.columns([3, 1.4], vertical_alignment="center")
+        with fitz.open(path) as p:
+            n = p.page_count
+        a.markdown(f"**{esc(names.get(code, code))}** · {n} pages · every unit starts with a divider page: "
+                   "what is covered, what is missing, and a topic index with page numbers (overlapping topics "
+                   "across units are listed together).")
+        with open(path, "rb") as f:
+            b.download_button("Download exam pack", f.read(), file_name=os.path.basename(path),
+                              mime="application/pdf", type="primary", key=f"pack-{where}-{code}")
+
+
 def request_message(row):
     return (f"Hi everyone! Does anyone have notes for {row['subject_name']} Unit {row['unit']} - {row['title']}? "
             f"I'm missing: {', '.join(row['missing'])}. Please share if you have them, thanks!")
@@ -684,6 +704,7 @@ def page_coverage():
                         st.session_state.goto = "Cluster inspector"
                         st.rerun()
     st.container(key="lastrow")
+    pack_buttons("dash")
 
     st.markdown('<div class="how"><b>HOW A GAP IS DECIDED</b><br>After de-duplication, every subtopic '
                 'is searched for on the pages of each note. COVERED = its keywords appear on a page (we show which '
@@ -947,6 +968,7 @@ def page_vault():
     if os.path.isdir(VAULT_FOLDER):
         st.markdown('<div class="tree">SlothVault/\n' + esc("\n".join(_tree(VAULT_FOLDER))) + "</div>",
                     unsafe_allow_html=True)
+    pack_buttons("vault")
     st.markdown('<div class="kicker" style="margin-top:22px">EXAM-READY PDFS · ONE PER UNIT, ORIGINAL PAGES</div>',
                 unsafe_allow_html=True)
     for u in R["units"]:

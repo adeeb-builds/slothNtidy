@@ -176,3 +176,34 @@ def test_plural_and_singular_both_match():
     d = _doc("ml.pdf", "A feature set is the collection of features; every dataset is split.")
     _match([d], units, None, log=lambda *a: None)
     assert set(d["hits"]["ML-U1"]) == {"Feature sets", "Datasets"}
+
+
+# ---------------------------------------------------------------- exam pack (one PDF per subject)
+
+def test_exam_pack_page_numbers_point_at_the_topic(tmp_path):
+    import re
+    from exporter import export_subject_packs
+    from matcher import unit_coverage
+    units = _flatten({"subjects": [{"code": "ML", "name": "Machine Learning", "units": [
+        {"unit": 1, "title": "Supervised learning", "subtopics": [{"name": n, "keywords": []} for n in
+                                                                ("Linear Regression", "Logistic Regression", "SVM")]},
+        {"unit": 2, "title": "Unsupervised learning", "subtopics": [{"name": "K-means", "keywords": []}]}]}]})
+    notes = tmp_path / "u1.pdf"
+    _pdf(notes, "")                                    # 3 pages, topics on known pages
+    doc = fitz.open()
+    for body in ("UNIT 1 SUPERVISED LEARNING. Machine Learning intro.", "Linear regression fits a line.",
+                 "Logistic regression gives probabilities."):
+        doc.new_page().insert_textbox(fitz.Rect(50, 50, 550, 800), body, fontsize=11)
+    doc.save(str(notes))
+    d = P.extract_document(str(notes))
+    d["status"] = "kept"
+    _match([d], units, None, log=lambda *a: None)
+    rows = unit_coverage([d], units)
+    packs = export_subject_packs([d], rows, out_dir=str(tmp_path / "packs"), log=lambda *a: None)
+    with fitz.open(packs["ML"]) as pack:
+        assert pack.page_count == 1 + 1 + 3 + 1          # cover, Unit 1 divider, 3 note pages, Unit 2 divider
+        divider = pack[1].get_text()
+        ref = int(re.search(r"Logistic Regression\s+p\.(\d+)", divider).group(1))
+        assert "Logistic regression" in pack[ref - 1].get_text()       # the index points at the right page
+        assert "ASK YOUR CLASS" in pack[5].get_text() and "K-means" in pack[5].get_text()   # missing unit
+        assert [t[1].split(":")[0] for t in pack.get_toc() if t[0] == 1][1:] == ["Unit 1", "Unit 2"]
