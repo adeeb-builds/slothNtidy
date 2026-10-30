@@ -1,3 +1,9 @@
+## [2026-10-30] - Review several files at once
+- Review & duplicates: tick boxes on every "needs your decision" card, Tick all / Untick all, and
+  "Tick the N unreadable file(s)" (handwritten notes from other subjects); "Put the ticked files in" a unit
+  or "Not in syllabus" with one Apply - merged PDFs and the exam pack are rebuilt once
+- Decisions apply to the current sort only (nothing is carried over to the next subject)
+
 ## [2026-10-30] - Exam pack: one PDF per subject
 - New "Download exam pack" on the Coverage dashboard and Sorted vault pages: one PDF per subject
 - Subject cover page: every unit with its status and starting page

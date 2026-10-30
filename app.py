@@ -21,7 +21,7 @@ from config import (INBOX_FOLDER, OUTPUT_FOLDER, REPORT_JSON, REPORT_MD, SYLLABU
                     VAULT_FOLDER, configure_tesseract)
 from embedder import load_embedder
 from parser import file_hash, scan_inbox
-from pipeline import STAGES, assign_to_unit, mark_not_in_syllabus, restore_removed, run
+from pipeline import STAGES, assign_to_unit, decide_many, mark_not_in_syllabus, restore_removed, run
 from mascot import sloth_with_bubble
 from syllabus import load_syllabus, load_syllabus_doc, save_syllabus_doc
 from syllabus_reader import SYLLABUS_TYPES, read_syllabus
@@ -837,6 +837,38 @@ def page_inspector():
 
 # ====================================================================== Review & duplicates
 
+def review_bulk_bar(review, options, fmt):
+    """Decide several files at once: tick them (or pick all unreadable ones) and file them in one go.
+    Decisions apply to this sort only - nothing is remembered for the next one."""
+    unreadable = [d for d in review if d.get("status") == "unreadable" or d.get("chars", 0) < 60]
+    ticked = [d for d in review if st.session_state.get(f"tick-{d['path']}")]
+    with st.container(border=True):
+        st.markdown("**Several files at once** · tick files below, then file them together. "
+                    "Handwritten or unreadable notes from other subjects can be cleared in one click.")
+        c1, c2, c3 = st.columns([1, 1, 1.6])
+        if c1.button("Tick all", key="tick-all"):
+            for d in review:
+                st.session_state[f"tick-{d['path']}"] = True
+            st.rerun()
+        if c2.button("Untick all", key="tick-none", disabled=not ticked):
+            for d in review:
+                st.session_state[f"tick-{d['path']}"] = False
+            st.rerun()
+        if unreadable and c3.button(f"Tick the {len(unreadable)} unreadable file(s)", key="tick-unreadable"):
+            for d in review:
+                st.session_state[f"tick-{d['path']}"] = d in unreadable
+            st.rerun()
+        d1, d2 = st.columns([2.2, 1.4], vertical_alignment="bottom")
+        target = d1.selectbox("Put the ticked files in", options, index=options.index("__none__"),
+                              format_func=fmt, key="bulk-target")
+        if d2.button(f"Apply to {len(ticked)} ticked file(s)", type="primary", disabled=not ticked, key="bulk-apply"):
+            decide_many(R, [d["path"] for d in ticked], None if target == "__none__" else target, log=lambda *a: None)
+            for d in review:
+                st.session_state.pop(f"tick-{d['path']}", None)
+            st.toast(f"Filed {len(ticked)} file(s). Dashboard and merged PDFs updated.")
+            st.rerun()
+
+
 def page_review():
     header("", "Review &", "duplicates.",
            "Uncertain matches and removed files are shown to you - never silently assigned or deleted.")
@@ -850,8 +882,11 @@ def page_review():
     st.markdown(f'<div class="kicker">NEEDS YOUR DECISION · {len(review)}</div>', unsafe_allow_html=True)
     if not review:
         st.caption("Nothing to decide.")
+    else:
+        review_bulk_bar(review, options, fmt)
     for d in review:
         with st.container(border=True):
+            st.checkbox("Tick to decide together with others", key=f"tick-{d['path']}")
             a, b = st.columns([1, 2.4], gap="medium")
             with a:
                 preview(d, 0, dpi=45)

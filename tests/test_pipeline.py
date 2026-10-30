@@ -147,3 +147,15 @@ def test_demo_end_to_end(demo_run):
     # the student's decision on the ambiguous note is applied everywhere
     pipeline.assign_to_unit(r, "00000044-DOC-20261023-WA0044.pdf", "DBMS-U4", log=lambda *x: None)
     assert r["match_counts"]["needs-review"] == 0
+
+
+@pytest.mark.skipif(not configure_tesseract(), reason="Tesseract not installed")
+def test_several_review_decisions_at_once(demo_run):
+    pipeline, out = demo_run
+    r = pipeline.run(os.path.join(ROOT, "tests", "demo_data", "demo_inbox"),
+                     os.path.join(ROOT, "tests", "demo_data", "syllabus.json"), None, log=lambda *x: None)
+    review = [d["path"] for d in r["documents"] if d.get("coverage") == "needs-review"]
+    assert review
+    pipeline.decide_many(r, review, None, log=lambda *x: None)          # all "not in syllabus"
+    assert r["match_counts"]["needs-review"] == 0
+    assert all(d["coverage"] == "unmatched" for d in r["documents"] if d["path"] in review)

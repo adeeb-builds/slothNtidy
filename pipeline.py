@@ -221,6 +221,26 @@ def mark_not_in_syllabus(result: dict, orig_name: str, log=print):
     _refresh(result, log)
 
 
+def decide_many(result: dict, paths: list, unit_id=None, log=print):
+    """Several review decisions at once (ticked files): put them all in one unit, or - with
+    unit_id=None - mark them all 'not in syllabus'. Merged PDFs are rebuilt once, at the end.
+    Nothing is remembered for the next sort."""
+    units = load_syllabus(result["syllabus_path"])
+    wanted = set(paths)
+    for doc in result["documents"]:
+        if doc["path"] not in wanted:
+            continue
+        if unit_id:
+            doc.update(coverage="sorted", unit_id=unit_id, suggested_unit_id=None, candidates=[],
+                       reason="Assigned by you" + (f" (evidence: {', '.join(doc['hits'][unit_id])})"
+                                                   if doc.get("hits", {}).get(unit_id) else ""))
+        else:
+            doc.update(coverage="unmatched", unit_id=None, suggested_unit_id=None, candidates=[],
+                       reason="Marked by you as not in syllabus")
+        _refile(doc, units, log)
+    _refresh(result, log)
+
+
 def restore_removed(result: dict, orig_name: str, embedder=None, log=print):
     """'Not a duplicate / not a circular - keep it': the note goes back through matching."""
     units = load_syllabus(result["syllabus_path"])
