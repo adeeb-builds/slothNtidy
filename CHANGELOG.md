@@ -6,6 +6,9 @@
 - Understands "UNIT I" heading layouts and Unit / Topic tables (including rows whose numeral OCR lost),
   several subjects and pages at once; skips lecture hours, page headers, book lists and course outcomes
 - 10 new tests (21 in total), including a phone photo of a printed syllabus table
+- Fixes from the first real syllabus: subject name taken from a heading line when there is no "Course Title:",
+  "Unit $5" OCR noise and headings glued to the previous line, hyphenated words across lines, no splitting of
+  "Error Detection and Correction Techniques" at "and", generic subtopics like "Introduction" left out
 
 
 ## [2026-10-30] - slothNtidy v2: the notes sorter app

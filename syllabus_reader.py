@@ -100,7 +100,7 @@ def read_file(name: str, data: bytes) -> list:
 
 ROMAN = {"i": 1, "ii": 2, "iii": 3, "iv": 4, "v": 5, "vi": 6, "vii": 7, "viii": 8, "ix": 9, "x": 10,
          "xi": 11, "xii": 12}
-DASH = r"[\s\-–—:.|]*"
+DASH = r"[\s\-–—:.|$§#*'\"]*"           # OCR noise between UNIT and its number, e.g. "Unit $5"
 NUM = r"([ivxl|]{1,4}|\d{1,2})"   # OCR often reads I as l or |
 UNIT_WORD = re.compile(rf"^\W*(?:unit|module|block)\b{DASH}{NUM}\b(.*)$", re.I)
 ROW_NUMERAL = re.compile(rf"^\W*{NUM}\s*[|.)]?\s+(.+)$", re.I)        # table row: "IV Normalization: ..."
@@ -119,7 +119,26 @@ PAGE_HEADER = re.compile(r"\b(?:university|vishwavidyalaya|institute of|college 
                          r"b\.?\s?sc|m\.?\s?sc|bca|mca|b\.?\s?com|scheme of|syllabus for|evaluation scheme|"
                          r"page\s+\d|effective from|session\s*20\d\d|academic year)\b", re.I)
 JUNK_NUMERAL = re.compile(r"^[ivxl|1]{1,4}[\s.)|]+(?=[A-Z])", re.I)
+GENERIC = {"introduction", "overview", "basics", "basic concepts", "summary", "conclusion", "review",
+           "revision", "applications", "examples", "case study", "case studies"}
+NOT_A_TITLE = re.compile(r"^\W*(?:unit|units|topics?|contents?|hours?|hrs|lectures?|s\.?\s?no|sr\.?\s?no|syllabus|"
+                         r"course\s+code|subject\s+code|paper\s+code|max|marks|credits?|l\s*-?\s*t\s*-?\s*p|"
+                         r"proposed|no\.? of)\b", re.I)
 SMALL = {"and", "of", "the", "&", "to", "in", "for", "with", "on", "a", "an"}
+
+
+def _looks_like_title(line: str) -> bool:
+    words = re.findall(r"[A-Za-z][A-Za-z&'-]*", line)
+    return (2 <= len(words) <= 7 and "," not in line and ":" not in line and not NOT_A_TITLE.match(line)
+            and not re.search(r"\d{3}", line) and len(line) <= 70)
+
+
+def _title_case(line: str) -> str:
+    line = re.sub(r"\s+", " ", line).strip(" .:-–|*")
+    if line.isupper():   # "COMPUTER NETWORKS" -> "Computer Networks"
+        line = " ".join(w if w.lower() in SMALL else w.capitalize() for w in line.lower().split())
+        line = line[0].upper() + line[1:]
+    return line
 
 
 def _num(token: str):
@@ -151,6 +170,7 @@ class _Builder:
         self.subjects = []
         self.unit = None          # the unit currently receiving topic text
         self.stopped = False      # inside "Text Books", "Course Outcomes", ...
+        self.candidate = ""       # a short heading seen before the first unit, e.g. "COMPUTER NETWORKS"
 
     # subjects
     def subject(self, name: str):
@@ -177,6 +197,10 @@ class _Builder:
             number = self.last_no() + 1
         if number == 1 and self.last_no() >= 2:   # numbering restarted: a new subject without a header
             self.subjects.append({"name": "", "units": []})
+        units = self._units()
+        if not units and not self.subjects[-1]["name"] and self.candidate:
+            self.subjects[-1]["name"] = self.candidate          # no "Course Title:" line: use the heading
+        self.candidate = ""
         self.unit = {"unit": number, "title": title.strip(" :-–|"), "body": []}
         self._units().append(self.unit)
         self.stopped = False
@@ -207,7 +231,11 @@ def _unit_from_rest(b: _Builder, number, rest: str):
 
 def parse_text(text: str) -> dict:
     """Turns syllabus text into {"subjects": [{name, units: [{unit, title, body}]}]} (body = raw text)."""
-    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)          # words broken across lines
+    text = re.sub(r"(\w)-\n([a-z])", r"\1\2", text)        # "manage-\nment" -> "management"
+    text = re.sub(r"(\w)-\n([A-Z])", r"\1-\2", text)       # "Packet-\nSwitched" keeps its hyphen
+    # a UNIT heading that OCR glued onto the end of the previous line starts its own line
+    text = re.sub(r"(?<=[.;,)\]])[ \t]+(?=(?:UNIT|Unit|MODULE|Module)\b[\s\-–—:.|$§#*]*(?:[IVXivxl|]{1,4}|\d{1,2})\b)",
+                  "\n", text)
     lines = [re.sub(r"\s+", " ", l).strip() for l in text.splitlines()]
     # Decide per subject section whether units are marked with the word UNIT (a photo of one
     # subject may be a table while the next subject's page uses "Unit-1" headings).
@@ -233,6 +261,8 @@ def parse_text(text: str) -> dict:
         if STOP.match(line):
             b.stopped = True
             continue
+        if (b.unit is None or b.stopped) and not UNIT_WORD.match(line) and _looks_like_title(line):
+            b.candidate = _title_case(line)
         m = UNIT_WORD.match(line)
         if m:
             _unit_from_rest(b, _num(m.group(1)), m.group(2))
@@ -305,10 +335,13 @@ def _tidy(item: str) -> str:
 def split_subtopics(body: str) -> list:
     items, seen = [], set()
     for part in _split_top(body, ",;:"):
-        part = re.sub(r"\s+(?:and|&)\s+(?=[A-Z])", ", ", part)    # "Paging and Segmentation" stays; "LRU and FIFO" splits
+        # "LRU and FIFO" -> two subtopics; "Error Detection and Correction Techniques" stays one
+        part = re.sub(r"^(\s*[A-Z][\w/+-]*)\s+(?:and|&)\s+([A-Z][\w/+-]*\s*)$", r"\1, \2", part)
         for sub in _split_top(part, ","):
             sub = _tidy(sub)
             if len(sub) < 2 or sub.isdigit() or not re.search(r"[A-Za-z]", sub):
+                continue
+            if sub.lower() in GENERIC:      # "Introduction" alone would be ticked by almost every note
                 continue
             key = sub.lower()
             if key not in seen:

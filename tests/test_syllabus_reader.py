@@ -154,3 +154,32 @@ def test_phone_photo_of_a_printed_syllabus_table():
     assert s[0]["code"] == "DBMS"
     assert [u["title"] for u in s[0]["units"]] == [
         "Introduction", "Relational Model", "SQL", "Normalization", "Transaction Processing"]
+
+
+# Shaped like the first real college syllabus read with the app (30 Oct 2026): the subject is only a
+# heading line, OCR glued "Unit $5" onto the end of a line, and a hyphenated word is split across lines.
+REAL_CN = """HEMVATI NANDAN BAHUGUNA GARHWAL UNIVERSITY
+B.Sc. (Computer Science) Semester V
+COMPUTER NETWORKS
+Unit 1: Computer Networks and The Internet
+What is the Internet, network edge, Delay, Loss and throughput in Packet-
+Switched Networks.
+Unit 4: Network Layer
+Introduction, Internet Protocol (IP): Forwarding
+and Addressing in the Internet, Broadcast and Multicast Routing. Unit $5
+Data Link Layer
+Introduction to the link layer, Error Detection and Correction Techniques, Multiplexing and Demultiplexing.
+"""
+
+
+def test_real_syllabus_shapes():
+    syl = to_syllabus(parse_text(REAL_CN))
+    s = syl["subjects"][0]
+    assert (s["code"], s["name"]) == ("CN", "Computer Networks")         # name from the heading line
+    assert [(u["unit"], u["title"]) for u in s["units"]] == [
+        (1, "Computer Networks and The Internet"), (4, "Network Layer"), (5, "Data Link Layer")]
+    u1, u4, u5 = [[t["name"] for t in u["subtopics"]] for u in s["units"]]
+    assert "Loss and throughput in Packet-Switched Networks" in u1         # hyphen kept, one subtopic
+    assert "Introduction" not in u4                                        # too generic to prove anything
+    assert "Forwarding and Addressing in the Internet" in u4
+    assert "Error Detection and Correction Techniques" in u5               # not split at "and"
