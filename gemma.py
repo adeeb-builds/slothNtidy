@@ -287,7 +287,13 @@ def read_syllabus_with_gemma(files, reader: "GemmaReader") -> dict:
             with Image.open(io.BytesIO(data)) as img:
                 pngs.append(_png_bytes(img))
     prompt = SYLLABUS_PROMPT + ("\n\nSyllabus text:\n" + "\n".join(texts) if texts else "")
-    answer = reader.ask(pngs, prompt, timeout=GEMMA_TIMEOUT * 3)
+    # Same photo(s) read before -> Gemma's saved answer comes back instantly (e.g. during a live demo).
+    key = "syl-" + hashlib.sha256(b"".join(pngs) + prompt.encode() + reader.model.encode()).hexdigest()[:32]
+    answer = reader._cache_get(key)
+    if answer is None:
+        answer = reader.ask(pngs, prompt, timeout=GEMMA_TIMEOUT * 3)
+        if parse_syllabus_json(answer)["subjects"]:
+            reader._cache_put(key, answer)
     syl = parse_syllabus_json(answer)
     warnings = [] if syl["subjects"] else ["Gemma 4 did not find any units."]
     return {"syllabus": syl, "text": "(read by " + reader.name + ")\n" + answer.strip(), "warnings": warnings}

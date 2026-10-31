@@ -86,7 +86,7 @@ The app starts empty: no sample syllabus and no sample chats.
 Tesseract reads printed text but not handwriting, so handwritten notes used to wait in *Needs review*. **Gemma 4**, Google's open-weight multimodal model, now reads those pages from their images.
 
 * **Gemma only reads; it never decides.** Its transcript goes through the same keyword matching as every other page, so each tick is still traceable to a page, and the Cluster Inspector shows the page image next to Gemma's transcript.
-* **Only pages Tesseract cannot read go to Gemma**: too little text, or mostly garbage. That's at most 4 per file (`MAX_GEMMA_PAGES`). Typed PDFs never go to Gemma.
+* **Only pages Tesseract cannot read go to Gemma**: too little text, or mostly garbage. That's at most 2 per file (`MAX_GEMMA_PAGES`). Typed PDFs never go to Gemma.
 * **It can never break a sort.** Answers are cached in `.gemma_cache/`, so a second run is instant and works offline. Each page gets a timeout and one retry, and Gemma switches itself off after 3 failures in a row, leaving Tesseract's text in place.
 
 **You never choose which reader reads which page** - the program decides page by page: typed PDF text is read directly, printed scans go to Tesseract, and pages Tesseract cannot read go to Gemma 4. Paste a free Gemini API key once in **3 · Sort**; it is saved on the laptop in `.gemini_key` (git-ignored) and Gemma switches on by itself. To run Gemma locally instead, set `GEMMA_BACKEND = "local"` in `config.py`.

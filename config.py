@@ -33,7 +33,8 @@ GEMMA_BACKEND = "api"         # "api" = Google Gemini API (online); "local" = Ol
 GEMMA_KEY_FILE = "./.gemini_key"         # the API key, saved on this laptop only (git-ignored)
 GEMMA_API_MODEL = "gemma-4-26b-a4b-it"   # Gemma 4 on Google's Gemini API (also: gemma-4-31b-it)
 GEMMA_LOCAL_MODEL = "gemma4:e4b"         # Gemma 4 on this laptop via Ollama (ollama pull gemma4:e4b)
-MAX_GEMMA_PAGES = 4           # handwritten pages per document sent to Gemma (enough to place it in a unit)
+MAX_GEMMA_PAGES = 2           # handwritten pages per document sent to Gemma (enough to place it in a unit;
+                              # each page takes Gemma ~10-20 s over the internet)
 GEMMA_MAX_SIDE = 1600         # page images are shrunk to at most this many pixels per side before sending
 GEMMA_TIMEOUT = 60            # seconds to wait for one page
 GEMMA_MAX_FAILURES = 3        # after this many failed pages in a row, Gemma switches off for the run

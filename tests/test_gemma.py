@@ -88,7 +88,8 @@ def test_cache_means_second_run_needs_no_internet(tmp_path):
     assert offline.calls == 0 and reader.cache_hits == 1 and "sliding window" in d["text"]
 
 
-def test_gemma_down_never_crashes_and_switches_itself_off(tmp_path):
+def test_gemma_down_never_crashes_and_switches_itself_off(tmp_path, monkeypatch):
+    monkeypatch.setattr(P, "MAX_GEMMA_PAGES", 4)
     server = FakeGemmaServer(fail=True)
     reader = _reader(tmp_path, server)
     d = P.extract_document(_scan_pdf(tmp_path / "n.pdf", pages=4), gemma=reader)
@@ -98,7 +99,7 @@ def test_gemma_down_never_crashes_and_switches_itself_off(tmp_path):
 
 
 def test_only_a_few_pages_per_document_go_to_gemma(tmp_path, monkeypatch):
-    monkeypatch.setattr(P, "MAX_GEMMA_PAGES", 2)
+    monkeypatch.setattr(P, "MAX_GEMMA_PAGES", 2)  # explicit, whatever config says
     server = FakeGemmaServer()
     reader = _reader(tmp_path, server)
     # different page images so the cache does not answer for them
@@ -213,3 +214,14 @@ def test_syllabus_falls_back_to_tesseract_when_gemma_fails(tmp_path):
     got = SR.read_syllabus([("cn.png", data)], gemma=_reader(tmp_path, FakeGemmaServer(fail=True)))
     assert got["reader"] == "tesseract" and got["syllabus"]["subjects"]
     assert "built-in reader" in got["warnings"][0]
+
+
+def test_same_syllabus_photo_is_read_by_gemma_only_once(tmp_path):
+    import syllabus_reader as SR
+    buf = tmp_path / "syl.png"
+    Image.new("RGB", (800, 600), "white").save(buf)
+    files = [("syl.png", buf.read_bytes())]
+    server = FakeGemmaServer(text=SYLLABUS_ANSWER)
+    SR.read_syllabus(files, gemma=_reader(tmp_path, server))
+    SR.read_syllabus(files, gemma=_reader(tmp_path, server))
+    assert server.calls == 1
