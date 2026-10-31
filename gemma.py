@@ -123,21 +123,24 @@ class GemmaReader:
 
     # ------------------------------------------------------------------ backends
     def _call(self, png: bytes) -> str:
-        b64 = base64.b64encode(png).decode()
+        return self.ask([png], PROMPT)
+
+    def ask(self, pngs: list, prompt: str, timeout: float = GEMMA_TIMEOUT) -> str:
+        """Sends page images + an instruction to Gemma 4 and returns its text answer (raises on errors)."""
+        imgs = [base64.b64encode(png).decode() for png in pngs]
         if self.backend == "api":
-            body = {"contents": [{"role": "user", "parts": [
-                {"inline_data": {"mime_type": "image/png", "data": b64}},
-                {"text": PROMPT}]}],
-                "generationConfig": {"temperature": 0.0}}
-            r = self._post(API_URL.format(model=self.model), json=body, timeout=GEMMA_TIMEOUT,
+            parts = [{"inline_data": {"mime_type": "image/png", "data": b}} for b in imgs] + [{"text": prompt}]
+            body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": {"temperature": 0.0}}
+            r = self._post(API_URL.format(model=self.model), json=body, timeout=timeout,
                            headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"})
             if r.status_code != 200:
                 raise RuntimeError(f"Gemini API {r.status_code}: {r.text[:200]}")
             parts = r.json()["candidates"][0]["content"].get("parts", [])
             return "\n".join(p.get("text", "") for p in parts if not p.get("thought"))
-        r = self._post(f"{self.host}/api/generate", timeout=GEMMA_TIMEOUT * 4, json={
-            "model": self.model, "prompt": PROMPT, "images": [b64], "stream": False,
-            "options": {"temperature": 0.0}})
+        body = {"model": self.model, "prompt": prompt, "stream": False, "options": {"temperature": 0.0}}
+        if imgs:
+            body["images"] = imgs
+        r = self._post(f"{self.host}/api/generate", timeout=timeout * 4, json=body)
         if r.status_code != 200:
             raise RuntimeError(f"Ollama {r.status_code}: {r.text[:200]}")
         return r.json().get("response", "")
@@ -205,3 +208,86 @@ def check_connection(backend: str, api_key: str = "", host: str = OLLAMA_HOST, p
                 else "Ollama is not running. Open the Ollama app first.")
     except Exception as e:
         return f"{type(e).__name__}: {e}"[:200]
+
+
+# ---------------------------------------------------------------------- syllabus reading
+
+SYLLABUS_PROMPT = """These are photos/pages of a university course syllabus. Read them and return ONLY a JSON object:
+{"subjects": [{"name": "full subject name", "code": "short code like CN or ML",
+  "units": [{"unit": 1, "title": "unit title",
+    "subtopics": [{"name": "subtopic as written", "keywords": ["...", "..."]}]}]}]}
+Rules:
+- Copy unit titles and subtopics from the page, fixing obvious misreadings and spelling (e.g. Intemet -> Internet).
+- Split long comma-separated topic lists into separate subtopics. Skip textbooks, references, outcomes, hours, marks.
+- keywords: 2-6 short lowercase words or phrases a student's notes on that subtopic would literally contain,
+  including standard abbreviations (e.g. "tcp", "three way handshake", "dns"). No generic words like "introduction".
+- code: 2-4 capital letters from the subject name (e.g. Computer Networks -> CN).
+Return JSON only, no explanation."""
+
+
+def parse_syllabus_json(text: str) -> dict:
+    """Gemma's answer -> the app's syllabus format. Anything malformed is dropped, never guessed."""
+    text = re.sub(r"^```[a-z]*\s*|```\s*$", "", (text or "").strip())
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return {"subjects": []}
+    data = json.loads(text[start:end + 1])
+    subjects, used = [], set()
+    for s in data.get("subjects") or []:
+        name = str(s.get("name") or "").strip()
+        code = re.sub(r"[^A-Za-z0-9]", "", str(s.get("code") or "")).upper()[:6]
+        if not code:
+            code = "".join(w[0] for w in re.findall(r"[A-Za-z]+", name) if w.lower() not in ("and", "of", "the", "to"))[:4].upper() or "SUB"
+        base, k = code, 2
+        while code in used:
+            code, k = f"{base}{k}", k + 1
+        used.add(code)
+        units, seen = [], set()
+        for i, u in enumerate(s.get("units") or [], 1):
+            try:
+                n = int(u.get("unit") or i)
+            except (TypeError, ValueError):
+                n = i
+            while n in seen:
+                n += 1
+            seen.add(n)
+            subs = []
+            for t in u.get("subtopics") or []:
+                tname = str(t.get("name") if isinstance(t, dict) else t).strip()
+                if not tname:
+                    continue
+                kws = t.get("keywords") if isinstance(t, dict) else []
+                kws = [str(x).strip().lower() for x in (kws or []) if str(x).strip()]
+                subs.append({"name": tname, "keywords": list(dict.fromkeys(kws))[:6]})
+            title = str(u.get("title") or "").strip() or (subs[0]["name"] if subs else f"Unit {n}")
+            if subs:
+                units.append({"unit": n, "title": title, "subtopics": subs})
+        if units:
+            subjects.append({"code": code, "name": name or code, "units": units})
+    return {"subjects": subjects}
+
+
+def read_syllabus_with_gemma(files, reader: "GemmaReader") -> dict:
+    """files: [(name, bytes)]. Photos and PDF pages go to Gemma 4 as images; Word files as text.
+    Returns {"syllabus", "text", "warnings"} like syllabus_reader.read_syllabus, or raises on failure."""
+    import pymupdf as fitz
+    from PIL import Image
+    pngs, texts = [], []
+    for name, data in files:
+        ext = os.path.splitext(name)[1].lower()
+        if ext == ".pdf":
+            with fitz.open("pdf", data) as doc:
+                for page in list(doc)[:6]:
+                    pix = page.get_pixmap(dpi=150)
+                    pngs.append(_png_bytes(Image.open(io.BytesIO(pix.tobytes("png")))))
+        elif ext == ".docx":
+            from syllabus_reader import _read_docx
+            texts.append(_read_docx(data))
+        else:
+            with Image.open(io.BytesIO(data)) as img:
+                pngs.append(_png_bytes(img))
+    prompt = SYLLABUS_PROMPT + ("\n\nSyllabus text:\n" + "\n".join(texts) if texts else "")
+    answer = reader.ask(pngs, prompt, timeout=GEMMA_TIMEOUT * 3)
+    syl = parse_syllabus_json(answer)
+    warnings = [] if syl["subjects"] else ["Gemma 4 did not find any units."]
+    return {"syllabus": syl, "text": "(read by " + reader.name + ")\n" + answer.strip(), "warnings": warnings}

@@ -344,8 +344,12 @@ def syllabus_upload_box():
                         horizontal=True, key="syl_mode")
         if files and st.button(f"Read {len(files)} file(s)", type="primary"):
             try:
-                with st.spinner("Reading your syllabus... (about 10 seconds per photo)"):
-                    got = read_syllabus([(f.name, f.getvalue()) for f in sorted(files, key=lambda f: f.name)])
+                key = _saved_key()
+                gemma = GemmaReader(GEMMA_BACKEND, api_key=key) if (key or GEMMA_BACKEND == "local") else None
+                with st.spinner("Gemma 4 is reading your syllabus and suggesting keywords... (up to a minute)"
+                                if gemma else "Reading your syllabus... (about 10 seconds per photo)"):
+                    got = read_syllabus([(f.name, f.getvalue()) for f in sorted(files, key=lambda f: f.name)],
+                                        gemma=gemma)
             except Exception as e:  # Tesseract missing, damaged file, unsupported type
                 st.error(f"Could not read the syllabus: {e}")
                 return
@@ -361,6 +365,7 @@ def syllabus_upload_box():
             subs = got["syllabus"]["subjects"]
             st.session_state.syl_draft = base + new_rows
             st.session_state.syl_draft_info = {
+                "reader": got.get("reader", "tesseract"),
                 "summary": f"{len(subs)} subject(s), {sum(len(x['units']) for x in subs)} unit(s), "
                            f"{len(new_rows)} subtopic(s): " + ", ".join(f"{x['name']} ({x['code']})" for x in subs),
                 "warnings": got["warnings"], "text": got["text"]}
@@ -369,7 +374,9 @@ def syllabus_upload_box():
 
     if has_draft:
         info = st.session_state.syl_draft_info
-        st.markdown('<div class="note"><span class="kicker">DRAFT - NOT SAVED YET</span>Read from your syllabus: '
+        by = ("Read by <b>Gemma 4</b>: it fixed misread words and suggested the keywords. "
+              if info.get("reader") == "gemma" else "Read from your syllabus: ")
+        st.markdown('<div class="note"><span class="kicker">DRAFT - NOT SAVED YET</span>' + by +
                     f'{esc(info["summary"])}.<br>Check every row before saving: photos can misread a letter '
                     '(e.g. <b>SJF</b> read as <b>SJE</b>). Fix the <b>Subject code</b> (it becomes the folder name), '
                     'delete rows you do not need, then press <b>Save syllabus</b>.</div>', unsafe_allow_html=True)

@@ -433,9 +433,22 @@ def _score(syl: dict) -> int:
     return sum(len(s["units"]) for s in syl["subjects"])
 
 
-def read_syllabus(files) -> dict:
+def read_syllabus(files, gemma=None) -> dict:
     """files: list of (name, bytes) in page order. Returns
-    {"syllabus": {...}, "text": raw text read, "warnings": [...]}"""
+    {"syllabus": {...}, "text": raw text read, "warnings": [...], "reader": "gemma" | "tesseract"}
+    gemma: optional gemma.GemmaReader - Gemma 4 reads the pages, fixes misreadings and suggests keywords.
+    If Gemma fails or finds nothing, the built-in Tesseract reader is used instead."""
+    gemma_problem = ""
+    if gemma is not None:
+        try:
+            from gemma import read_syllabus_with_gemma
+            got = read_syllabus_with_gemma(files, gemma)
+            if got["syllabus"]["subjects"]:
+                got["reader"] = "gemma"
+                return got
+            gemma_problem = "Gemma 4 found no units"
+        except Exception as e:
+            gemma_problem = f"Gemma 4 could not read it ({type(e).__name__})"
     texts, warnings = [], []
     for name, data in files:
         w = image_width(name, data)
@@ -460,4 +473,6 @@ def read_syllabus(files) -> dict:
         if s["name"].startswith("Subject "):
             warnings.append(f"The subject name was not found for '{s['name']}' - type it in the Subject name "
                             "box above the table and press Apply.")
-    return {"syllabus": syl, "text": text, "warnings": warnings}
+    if gemma_problem:
+        warnings.insert(0, gemma_problem + ", so the built-in reader (Tesseract) was used.")
+    return {"syllabus": syl, "text": text, "warnings": warnings, "reader": "tesseract"}

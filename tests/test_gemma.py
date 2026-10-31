@@ -176,3 +176,40 @@ def test_full_sort_files_a_handwritten_note_only_because_gemma_read_it(tmp_path,
         monkeypatch.undo()
         for m in mods:
             importlib.reload(m)
+
+
+SYLLABUS_ANSWER = """```json
+{"subjects": [{"name": "Computer Networks", "code": "CN", "units": [
+ {"unit": 1, "title": "Computer Networks and the Internet", "subtopics": [
+   {"name": "What is the Internet", "keywords": ["internet", "ISP"]},
+   {"name": "Network Core", "keywords": ["packet switching", "circuit switching"]}]},
+ {"unit": 3, "title": "Transport Layer", "subtopics": [
+   {"name": "TCP", "keywords": ["tcp", "three way handshake", "tcp"]}]},
+ {"unit": 4, "title": "Empty unit", "subtopics": []}]}]}
+```"""
+
+
+def test_gemma_reads_the_syllabus_photo_and_suggests_keywords(tmp_path):
+    import syllabus_reader as SR
+    from syllabus import flatten
+    server = FakeGemmaServer(text=SYLLABUS_ANSWER)
+    buf = tmp_path / "syl.png"
+    Image.new("RGB", (800, 600), "white").save(buf)
+    got = SR.read_syllabus([("syl.png", buf.read_bytes())], gemma=_reader(tmp_path, server))
+    assert got["reader"] == "gemma"
+    cn = got["syllabus"]["subjects"][0]
+    assert cn["code"] == "CN" and [u["unit"] for u in cn["units"]] == [1, 3]   # empty unit dropped
+    assert cn["units"][0]["subtopics"][0]["keywords"] == ["internet", "isp"]      # lower-cased
+    assert cn["units"][1]["subtopics"][0]["keywords"] == ["tcp", "three way handshake"]  # de-duplicated
+    assert server.last["json"]["contents"][0]["parts"][0]["inline_data"]["data"]   # the photo was sent
+    assert len(flatten(got["syllabus"])) == 2                                      # loads as a normal syllabus
+
+
+def test_syllabus_falls_back_to_tesseract_when_gemma_fails(tmp_path):
+    import os
+    import syllabus_reader as SR
+    with open(os.path.join(os.path.dirname(__file__), "fixtures", "real_syllabus_cn.png"), "rb") as f:
+        data = f.read()
+    got = SR.read_syllabus([("cn.png", data)], gemma=_reader(tmp_path, FakeGemmaServer(fail=True)))
+    assert got["reader"] == "tesseract" and got["syllabus"]["subjects"]
+    assert "built-in reader" in got["warnings"][0]
