@@ -29,6 +29,8 @@ MIN_TEXT_CHARS = 60           # a document with less readable text than this is 
 # ---------------------------------------------------------------- Gemma 4 (handwriting reader)
 # Tesseract cannot read handwriting. When a scanned page or photo gives too little / garbled
 # text, the page image is sent to Gemma 4, which writes down what is on it. See gemma.py.
+GEMMA_BACKEND = "api"         # "api" = Google Gemini API (online); "local" = Ollama on this laptop
+GEMMA_KEY_FILE = "./.gemini_key"         # the API key, saved on this laptop only (git-ignored)
 GEMMA_API_MODEL = "gemma-4-26b-a4b-it"   # Gemma 4 on Google's Gemini API (also: gemma-4-31b-it)
 GEMMA_LOCAL_MODEL = "gemma4:e4b"         # Gemma 4 on this laptop via Ollama (ollama pull gemma4:e4b)
 MAX_GEMMA_PAGES = 4           # handwritten pages per document sent to Gemma (enough to place it in a unit)

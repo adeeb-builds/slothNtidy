@@ -89,7 +89,7 @@ Tesseract reads printed text but not handwriting, so handwritten notes used to w
 * **Only pages Tesseract cannot read go to Gemma**: too little text, or mostly garbage. That's at most 4 per file (`MAX_GEMMA_PAGES`). Typed PDFs never go to Gemma.
 * **It can never break a sort.** Answers are cached in `.gemma_cache/`, so a second run is instant and works offline. Each page gets a timeout and one retry, and Gemma switches itself off after 3 failures in a row, leaving Tesseract's text in place.
 
-Switch it on in **3 · Sort → Read handwriting with Gemma 4**, then choose where it runs:
+**You never choose which reader reads which page** - the program decides page by page: typed PDF text is read directly, printed scans go to Tesseract, and pages Tesseract cannot read go to Gemma 4. Paste a free Gemini API key once in **3 · Sort**; it is saved on the laptop in `.gemini_key` (git-ignored) and Gemma switches on by itself. To run Gemma locally instead, set `GEMMA_BACKEND = "local"` in `config.py`.
 
 | | Google Gemini API | On this laptop (Ollama) |
 |---|---|---|
@@ -98,7 +98,7 @@ Switch it on in **3 · Sort → Read handwriting with Gemma 4**, then choose whe
 | Privacy | the handwritten page images are sent to Google | nothing leaves the laptop |
 | Speed | a few seconds per page | slow without a graphics card |
 
-The API key is typed into the app (or set as the `GEMINI_API_KEY` environment variable). It is never written to a file.
+The key can also come from the `GEMINI_API_KEY` environment variable. It is never committed to GitHub.
 
 ## AI models used (and their licenses)
 

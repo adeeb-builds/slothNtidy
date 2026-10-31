@@ -21,13 +21,21 @@ from config import (INBOX_FOLDER, OUTPUT_FOLDER, REPORT_JSON, REPORT_MD, SYLLABU
                     VAULT_FOLDER, configure_tesseract)
 from embedder import load_embedder
 from gemma import GemmaReader, check_connection
-from config import GEMMA_API_MODEL, GEMMA_LOCAL_MODEL
+from config import GEMMA_API_MODEL, GEMMA_BACKEND, GEMMA_KEY_FILE, GEMMA_LOCAL_MODEL
 from parser import file_hash, scan_inbox
 from pipeline import STAGES, assign_to_unit, decide_many, mark_not_in_syllabus, restore_removed, run
 from mascot import sloth_with_bubble
 from syllabus import load_syllabus, load_syllabus_doc, save_syllabus_doc
 from syllabus_reader import SYLLABUS_TYPES, read_syllabus
 from syllabus_reader import _subject_code as subject_code
+
+
+def _saved_key() -> str:
+    try:
+        with open(GEMMA_KEY_FILE, encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return os.environ.get("GEMINI_API_KEY", "")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 os.chdir(HERE)  # all paths in config.py are relative to the project folder
@@ -288,12 +296,12 @@ with st.sidebar:
     st.markdown('<div class="side-kicker">LOCAL ENGINE</div>', unsafe_allow_html=True)
     st.markdown(f"**Matching:** {embedder.name if embedder else 'Keyword evidence only'}")
     st.markdown(f"**OCR:** {'Tesseract ready' if ocr_available() else 'Tesseract not found - photos cannot be read'}")
-    if st.session_state.get("gemma_on"):
-        _api = st.session_state.get("gemma_where", "Google Gemini API") == "Google Gemini API"
+    if st.session_state.get("gemma_on", bool(_saved_key()) or GEMMA_BACKEND == "local"):
+        _api = GEMMA_BACKEND == "api"
         st.markdown(f"**Handwriting:** Gemma 4 ({'Gemini API' if _api else 'local'})")
         st.markdown("**Internet:** " + ("only for handwritten pages (Gemini API)" if _api else "not used"))
     else:
-        st.markdown("**Handwriting:** off (Gemma 4 can be switched on in 3 · Sort)")
+        st.markdown("**Handwriting:** Tesseract only (add a Gemini key in 3 · Sort for Gemma 4)")
         st.markdown("**Internet:** not used")
     if R:
         st.divider()
@@ -559,38 +567,40 @@ def stagebar(active=-1, done_upto=-1):
 
 
 def gemma_panel():
-    """Sort page: switch on Gemma 4 to read handwritten pages. Returns 'api', 'local' or None."""
-    st.session_state.setdefault("gemma_key", os.environ.get("GEMINI_API_KEY", ""))
+    """Sort page: Gemma 4 reads handwritten pages. The program decides page by page which reader to use;
+    the student only pastes the API key once. Returns the backend to use, or None when Gemma is off."""
+    if "gemma_key" not in st.session_state:
+        st.session_state.gemma_key = _saved_key()
     with st.container(border=True):
-        st.markdown("**Gemma 4 handwriting reader** · Tesseract cannot read handwriting, so handwritten notes "
-                    "used to wait in *Needs review*. Gemma 4 (Google's open-weight, multimodal model) looks at "
-                    "those pages and writes down what is on them. Its text then goes through the same keyword "
-                    "matching as every other page, so every tick still points to a page number.")
-        on = st.toggle("Read handwriting with Gemma 4", value=st.session_state.get("gemma_on", False),
-                       key="gemma_on")
-        if not on:
-            return None
-        where = st.radio("Where Gemma runs", ["Google Gemini API", "On this laptop (Ollama)"], key="gemma_where",
-                         horizontal=True)
-        backend = "api" if where == "Google Gemini API" else "local"
-        if backend == "api":
-            st.text_input("Gemini API key (free at aistudio.google.com)", type="password", key="gemma_key",
-                          help="Kept only while this app is open. Never saved to a file or to GitHub.")
-            st.caption(f"Model: {GEMMA_API_MODEL}. Only handwritten pages that Tesseract cannot read (at most a few "
-                       "per file) are sent to Google. Everything else stays on this laptop.")
+        st.markdown("**Gemma 4 handwriting reader** · you don't choose anything per page. Typed PDFs are read "
+                    "directly, printed scans by Tesseract, and any page Tesseract cannot read (handwriting) is "
+                    "sent to Gemma 4 automatically. Its text goes through the same keyword matching, so every "
+                    "tick still points to a page.")
+        if GEMMA_BACKEND == "api":
+            key = st.text_input("Gemini API key (free at aistudio.google.com) - saved on this laptop only",
+                                type="password", key="gemma_key")
+            if key.strip() and key.strip() != _saved_key():
+                with open(GEMMA_KEY_FILE, "w", encoding="utf-8") as f:
+                    f.write(key.strip())
+            has_key = bool(key.strip())
         else:
-            st.caption(f"Model: {GEMMA_LOCAL_MODEL} through Ollama. Nothing leaves this laptop. One-time setup: "
-                       f"ollama pull {GEMMA_LOCAL_MODEL}  (slow without a graphics card).")
-        if st.button("Test Gemma connection", key="gemma_test"):
-            with st.spinner("Asking Gemma..."):
-                problem = check_connection(backend, st.session_state.get("gemma_key", "").strip())
-            if problem:
-                st.error(problem)
-            else:
-                st.success("Gemma 4 is answering. Ready to read handwriting.")
-        st.caption("Answers are saved on this laptop (.gemma_cache), so sorting the same notes again is instant "
-                   "and works without internet.")
-        return backend
+            has_key = True
+            st.caption(f"Gemma runs on this laptop ({GEMMA_LOCAL_MODEL}, Ollama). Nothing leaves the computer.")
+        on = st.toggle("Read handwriting with Gemma 4", value=st.session_state.get("gemma_on", has_key),
+                       key="gemma_on", disabled=not has_key,
+                       help="Switch off only to show the 'before' picture: handwriting then waits in Needs review.")
+        if not has_key:
+            st.caption("Paste the key above to switch Gemma on.")
+        c1, c2 = st.columns([1, 2.4], vertical_alignment="center")
+        if c1.button("Test Gemma", key="gemma_test", disabled=not has_key):
+            with c2:
+                with st.spinner("Asking Gemma..."):
+                    problem = check_connection(GEMMA_BACKEND, st.session_state.get("gemma_key", "").strip())
+                if problem:
+                    st.error(problem)
+                else:
+                    st.success(f"Gemma 4 is answering ({GEMMA_API_MODEL if GEMMA_BACKEND == 'api' else GEMMA_LOCAL_MODEL}).")
+        return GEMMA_BACKEND if (on and has_key) else None
 
 
 def page_sort():

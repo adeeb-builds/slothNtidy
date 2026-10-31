@@ -25,3 +25,5 @@ my_syllabus.json
 
 # Gemma 4 answers cached between runs (contain text of your notes)
 .gemma_cache/
+# Gemini API key, saved by the app on this laptop only
+.gemini_key
