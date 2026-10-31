@@ -22,3 +22,6 @@ Thumbs.db
 output/
 inbox/
 my_syllabus.json
+
+# Gemma 4 answers cached between runs (contain text of your notes)
+.gemma_cache/

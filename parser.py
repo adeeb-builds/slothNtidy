@@ -15,7 +15,9 @@ from datetime import datetime
 
 import pymupdf as fitz
 
-from config import (CHAT_TYPES, IMAGE_TYPES, MAX_OCR_PAGES, MIN_PAGE_TEXT, PDF_TYPES, STICKER_PREFIX, WORK_FOLDER,
+from gemma import looks_unreadable
+
+from config import (CHAT_TYPES, IMAGE_TYPES, MAX_GEMMA_PAGES, MAX_OCR_PAGES, MIN_TEXT_CHARS, MIN_PAGE_TEXT, PDF_TYPES, STICKER_PREFIX, WORK_FOLDER,
                     configure_tesseract)
 
 # Invisible characters WhatsApp sprinkles into exports. U+200E before attachment
@@ -162,17 +164,38 @@ def image_to_pdf(image_path: str, work_dir: str = WORK_FOLDER) -> str:
     return out
 
 
-def extract_document(path: str, chat_meta: dict = None, work_dir: str = WORK_FOLDER) -> dict:
-    """Reads one note (PDF or photo) and returns everything later stages need."""
+def page_image(page, dpi: int = 200):
+    from PIL import Image
+    pix = page.get_pixmap(dpi=dpi)
+    return Image.open(io.BytesIO(pix.tobytes("png")))
+
+
+def _maybe_gemma(img, tess_text: str, gemma, budget: list):
+    """Ask Gemma 4 to read the page when Tesseract's text looks like handwriting it could not read.
+    Returns (text, reader). budget is a one-item list: pages this document may still send to Gemma."""
+    if gemma is None or budget[0] <= 0 or not looks_unreadable(tess_text, MIN_TEXT_CHARS):
+        return tess_text, ("tesseract" if tess_text else "none")
+    budget[0] -= 1
+    g = gemma.read_page(img)
+    if g and len(g) > len(tess_text):
+        return g, "gemma"
+    return tess_text, ("tesseract" if tess_text else "none")
+
+
+def extract_document(path: str, chat_meta: dict = None, work_dir: str = WORK_FOLDER, gemma=None) -> dict:
+    """Reads one note (PDF or photo) and returns everything later stages need.
+    gemma: an optional gemma.GemmaReader - reads handwritten pages Tesseract cannot."""
     orig_name = os.path.basename(path)
     ext = os.path.splitext(orig_name)[1].lower()
-    page_texts, ocr_used, kind = [], False, "pdf"
+    page_texts, page_readers, ocr_used, kind = [], [], False, "pdf"
+    budget = [MAX_GEMMA_PAGES]
 
     ocr_capped = 0
     if ext in IMAGE_TYPES:
         kind = "photo"
-        text = ocr_image(open_image(path))
-        page_texts = [text]
+        img = open_image(path)
+        text, reader = _maybe_gemma(img, ocr_image(img), gemma, budget)
+        page_texts, page_readers = [text], [reader]
         ocr_used = bool(text)
         pdf_path = image_to_pdf(path, work_dir)
     else:
@@ -181,15 +204,19 @@ def extract_document(path: str, chat_meta: dict = None, work_dir: str = WORK_FOL
             ocr_pages = 0
             for page in doc:
                 t = page.get_text().strip()
+                reader = "pdf"
                 if len(t) < MIN_PAGE_TEXT and ocr_pages >= MAX_OCR_PAGES:
                     ocr_capped += 1          # long scanned PDF: the first pages are enough to place it
+                    reader = "none"
                 elif len(t) < MIN_PAGE_TEXT:
                     ocr_pages += 1
-                    o = ocr_page(page)
+                    img = page_image(page)
+                    o, reader = _maybe_gemma(img, ocr_image(img), gemma, budget)
                     if o:
                         ocr_used, t = True, o
                         kind = "scan"
                 page_texts.append(t)
+                page_readers.append(reader)
 
     info = (chat_meta or {}).get(orig_name, {})
     caption = info.get("caption", "")
@@ -201,6 +228,8 @@ def extract_document(path: str, chat_meta: dict = None, work_dir: str = WORK_FOL
         "kind": kind,               # pdf | scan | photo
         "pages": len(page_texts),
         "page_texts": page_texts,
+        "page_readers": page_readers,   # per page: pdf | tesseract | gemma | none
+        "gemma_pages": page_readers.count("gemma"),
         "text": body,
         "chars": len(body),
         "ocr_used": ocr_used,

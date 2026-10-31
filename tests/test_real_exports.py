@@ -78,7 +78,7 @@ def test_a_damaged_file_is_listed_and_the_rest_is_still_read(tmp_path, media, mo
 def test_the_same_pdf_in_two_groups_is_read_once(tmp_path, media, monkeypatch):
     calls = []
     real = pipeline.extract_document
-    monkeypatch.setattr(pipeline, "extract_document", lambda p, m=None: calls.append(p) or real(p, m))
+    monkeypatch.setattr(pipeline, "extract_document", lambda p, m=None, **kw: calls.append(p) or real(p, m, **kw))
     copy_dir = tmp_path / "group2"
     copy_dir.mkdir()
     copy = copy_dir / "CN notes.pdf"

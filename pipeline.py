@@ -36,7 +36,7 @@ def _reset_output(log):
         os.makedirs(p, exist_ok=True)
 
 
-def _read_all(files, meta_by_folder, step, log):
+def _read_all(files, meta_by_folder, step, log, gemma=None):
     """Reads every file, several at a time. Identical files (same bytes, e.g. the same PDF shared in two
     groups) are read once. A file that cannot be opened is reported and skipped - it never stops the run."""
     by_hash, first_of = {}, {}
@@ -52,7 +52,7 @@ def _read_all(files, meta_by_folder, step, log):
     read, failed = {}, []
 
     def work(path):
-        return extract_document(path, meta_by_folder.get(os.path.dirname(path), {}))
+        return extract_document(path, meta_by_folder.get(os.path.dirname(path), {}), gemma=gemma)
 
     with ThreadPoolExecutor(max_workers=PARSE_WORKERS) as pool:
         futures = {pool.submit(work, p): p for p in unique}
@@ -79,17 +79,19 @@ def _read_all(files, meta_by_folder, step, log):
                      orig_name=os.path.basename(path), sender=info.get("sender", ""),
                      timestamp=info.get("timestamp", ""), date=info.get("date", ""),
                      group=info.get("group", ""), caption=info.get("caption", ""),
-                     page_texts=list(src["page_texts"]))
+                     page_texts=list(src["page_texts"]), page_readers=list(src.get("page_readers", [])))
         docs.append(d)
         log(f"   [READ] {d['orig_name']}: {d['pages']} page(s), {d['chars']} chars"
-            + (" (OCR)" if d["ocr_used"] else "") + (f" - caption: \"{d['caption']}\"" if d["caption"] else ""))
+            + (" (OCR)" if d["ocr_used"] else "")
+            + (f" - {d['gemma_pages']} handwritten page(s) read by Gemma 4" if d.get("gemma_pages") else "") + (f" - caption: \"{d['caption']}\"" if d["caption"] else ""))
     return docs, failed
 
 
 def run(inbox: str = INBOX_FOLDER, syllabus_path: str = SYLLABUS_FILE, embedder=None,
-        progress=None, log=print, read_photos: bool = True) -> dict:
+        progress=None, log=print, read_photos: bool = True, gemma=None) -> dict:
     """progress(stage_index, stage_name, done, total, message) is called as work happens.
-    read_photos=False skips photos (only PDFs are read) - much faster on big groups."""
+    read_photos=False skips photos (only PDFs are read) - much faster on big groups.
+    gemma: optional gemma.GemmaReader - Gemma 4 reads handwritten pages that Tesseract cannot."""
     t0 = time.time()
     step = progress or (lambda *a: None)
     units = load_syllabus(syllabus_path)
@@ -116,7 +118,12 @@ def run(inbox: str = INBOX_FOLDER, syllabus_path: str = SYLLABUS_FILE, embedder=
         raise FileNotFoundError(f"No PDFs or photos found in {', '.join(roots)}")
 
     log("\n[2 PARSE] reading every note" + ("" if ocr_ok else " (Tesseract not found: photos cannot be read)"))
-    docs, failed = _read_all(files, meta_by_folder, step, log)
+    if gemma is not None:
+        log(f"   handwriting reader: {gemma.name}")
+    docs, failed = _read_all(files, meta_by_folder, step, log, gemma=gemma)
+    if gemma is not None:
+        log(f"   Gemma 4 read {gemma.pages_read} handwritten page(s) ({gemma.cache_hits} from cache)"
+            + (f" - switched off after repeated errors: {gemma.last_error}" if gemma.disabled else ""))
     if not docs:
         raise FileNotFoundError("None of the files in the inbox could be read.")
 
@@ -145,6 +152,10 @@ def run(inbox: str = INBOX_FOLDER, syllabus_path: str = SYLLABUS_FILE, embedder=
         "inbox": [os.path.abspath(r) for r in roots],
         "engine": embedder.name if embedder else "Keyword evidence only (no embedding model installed)",
         "ocr": ocr_ok,
+        "gemma": None if gemma is None else {
+            "name": gemma.name, "backend": gemma.backend, "pages": sum(d.get("gemma_pages", 0) for d in docs),
+            "docs": sum(1 for d in docs if d.get("gemma_pages")), "cache_hits": gemma.cache_hits,
+            "disabled": gemma.disabled, "error": gemma.last_error},
         "counts": counts,
         "filed": filed,
         "match_counts": {k: sum(1 for d in kept if d.get("coverage") == k)

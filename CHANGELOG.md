@@ -1,3 +1,10 @@
+## [2026-10-31] - Gemma 4 reads handwritten notes
+- New `gemma.py`: Gemma 4 reads handwritten pages that Tesseract cannot (Gemini API `gemma-4-26b-a4b-it`, or local Ollama `gemma4:e4b`).
+- Only unreadable scanned pages/photos are sent (max 4 per file); typed PDFs never are.
+- Answers cached in `.gemma_cache/`; timeouts, one retry, auto-off after 3 failures, so a sort never crashes.
+- Sort page: Gemma switch, API key box, "Test Gemma connection". Dashboard and Cluster Inspector show "read by Gemma 4" and the transcript next to the page.
+- README: Gemma setup and "AI models used (and their licenses)". 11 new tests (fake Gemma, no internet).
+
 ## [2026-10-30] - Review several files at once
 - Review & duplicates: tick boxes on every "needs your decision" card, Tick all / Untick all, and
   "Tick the N unreadable file(s)" (handwritten notes from other subjects); "Put the ticked files in" a unit

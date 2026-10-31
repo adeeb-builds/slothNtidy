@@ -81,9 +81,37 @@ The app starts empty: no sample syllabus and no sample chats.
 
 *Coverage means "covered in the notes you received" — it is not a guarantee of exam completeness.*
 
+## Reading handwriting with Gemma 4
+
+Tesseract reads printed text but not handwriting, so handwritten notes used to wait in *Needs review*. **Gemma 4**, Google's open-weight multimodal model, now reads those pages from their images.
+
+* **Gemma only reads; it never decides.** Its transcript goes through the same keyword matching as every other page, so each tick is still traceable to a page, and the Cluster Inspector shows the page image next to Gemma's transcript.
+* **Only pages Tesseract cannot read go to Gemma**: too little text, or mostly garbage. That's at most 4 per file (`MAX_GEMMA_PAGES`). Typed PDFs never go to Gemma.
+* **It can never break a sort.** Answers are cached in `.gemma_cache/`, so a second run is instant and works offline. Each page gets a timeout and one retry, and Gemma switches itself off after 3 failures in a row, leaving Tesseract's text in place.
+
+Switch it on in **3 · Sort → Read handwriting with Gemma 4**, then choose where it runs:
+
+| | Google Gemini API | On this laptop (Ollama) |
+|---|---|---|
+| Model | `gemma-4-26b-a4b-it` | `gemma4:e4b` |
+| Needs | free API key from [aistudio.google.com](https://aistudio.google.com) | one-time download: `ollama pull gemma4:e4b` |
+| Privacy | the handwritten page images are sent to Google | nothing leaves the laptop |
+| Speed | a few seconds per page | slow without a graphics card |
+
+The API key is typed into the app (or set as the `GEMINI_API_KEY` environment variable). It is never written to a file.
+
+## AI models used (and their licenses)
+
+| Model | What it does here | License / terms |
+|---|---|---|
+| [Gemma 4](https://ai.google.dev/gemma) (`gemma-4-26b-a4b-it` on the Gemini API, `gemma4:e4b` on Ollama) | reads handwritten pages | [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) |
+| [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | ranks syllabus units by meaning (local) | Apache 2.0 |
+| [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) | reads printed scans and photos (local) | Apache 2.0 |
+| [nomic-embed-text](https://ollama.com/library/nomic-embed-text) (optional) | alternative local embeddings via Ollama | Apache 2.0 |
+
 ## Privacy
 
-WhatsApp exports contain classmates' names and phone numbers. slothNtidy processes everything on your laptop and never uploads anything. `inbox/`, `output/` and `my_syllabus.json` are git-ignored — **never commit a real chat export**.
+WhatsApp exports contain classmates' names and phone numbers. slothNtidy processes everything on your laptop. The one exception is when you switch on Gemma 4 with the Gemini API: then only the handwritten page images Tesseract could not read are sent to Google. Choose *On this laptop* to keep even those local. `inbox/`, `output/` and `my_syllabus.json` are git-ignored — **never commit a real chat export**.
 
 ---
 
@@ -92,6 +120,7 @@ WhatsApp exports contain classmates' names and phone numbers. slothNtidy process
 ```
 app.py            the UI (Streamlit)              main.py        command-line runner
 pipeline.py       runs all 7 stages + your review decisions
+gemma.py          Gemma 4 handwriting reader (Gemini API or local Ollama), with cache and fallbacks
 parser.py         WhatsApp chat parsing (Android, iPhone, short format) + PDF/photo reading + OCR
 filters.py        circulars, SHA-256 exact copies, text/pHash near-copies (keeps the fuller copy)
 matcher.py        keyword evidence per page + MiniLM unit ranking -> sorted / needs-review / unmatched
@@ -114,7 +143,7 @@ python -m pytest -q
 Covers caption pairing on real Android/iPhone exports (including WhatsApp's invisible U+200E mark), circular filtering, exact and near duplicates, subtopic evidence, ambiguous notes, a full end-to-end run on made-up class groups, and reading a syllabus from text, a Word table, a PDF and a phone photo.
 
 ## Known limits & roadmap
-* **Handwriting:** Tesseract reads neat handwriting; messy handwriting may land in *Needs review* (flagged, never lost). Test with your own photos. *Help wanted:* a local vision-OCR path.
+* **Handwriting:** read by Gemma 4 when switched on (see above). Gemma can misread very messy pages. Every transcript can be checked next to the original page in the Cluster Inspector. Without Gemma, handwriting lands in *Needs review* (flagged, never lost).
 * `.docx` / `.pptx` attachments are listed but not read yet.
 * Keywords are per-subtopic; a syllabus read from a photo gets keywords only for short forms like *Shortest Job First (SJF)*. Long subtopic names work better with a few short keywords added by hand.
 * The syllabus reader understands "UNIT I" headings and Unit / Topic tables; unusual layouts may need more correction in the table.

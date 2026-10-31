@@ -20,6 +20,8 @@ import streamlit as st
 from config import (INBOX_FOLDER, OUTPUT_FOLDER, REPORT_JSON, REPORT_MD, SYLLABUS_FILE,
                     VAULT_FOLDER, configure_tesseract)
 from embedder import load_embedder
+from gemma import GemmaReader, check_connection
+from config import GEMMA_API_MODEL, GEMMA_LOCAL_MODEL
 from parser import file_hash, scan_inbox
 from pipeline import STAGES, assign_to_unit, decide_many, mark_not_in_syllabus, restore_removed, run
 from mascot import sloth_with_bubble
@@ -286,7 +288,13 @@ with st.sidebar:
     st.markdown('<div class="side-kicker">LOCAL ENGINE</div>', unsafe_allow_html=True)
     st.markdown(f"**Matching:** {embedder.name if embedder else 'Keyword evidence only'}")
     st.markdown(f"**OCR:** {'Tesseract ready' if ocr_available() else 'Tesseract not found - photos cannot be read'}")
-    st.markdown("**Internet:** not used")
+    if st.session_state.get("gemma_on"):
+        _api = st.session_state.get("gemma_where", "Google Gemini API") == "Google Gemini API"
+        st.markdown(f"**Handwriting:** Gemma 4 ({'Gemini API' if _api else 'local'})")
+        st.markdown("**Internet:** " + ("only for handwritten pages (Gemini API)" if _api else "not used"))
+    else:
+        st.markdown("**Handwriting:** off (Gemma 4 can be switched on in 3 · Sort)")
+        st.markdown("**Internet:** not used")
     if R:
         st.divider()
         st.markdown('<div class="side-kicker">LAST RUN</div>', unsafe_allow_html=True)
@@ -550,6 +558,41 @@ def stagebar(active=-1, done_upto=-1):
     return '<div class="stagebar">' + "".join(cells) + "</div>"
 
 
+def gemma_panel():
+    """Sort page: switch on Gemma 4 to read handwritten pages. Returns 'api', 'local' or None."""
+    st.session_state.setdefault("gemma_key", os.environ.get("GEMINI_API_KEY", ""))
+    with st.container(border=True):
+        st.markdown("**Gemma 4 handwriting reader** · Tesseract cannot read handwriting, so handwritten notes "
+                    "used to wait in *Needs review*. Gemma 4 (Google's open-weight, multimodal model) looks at "
+                    "those pages and writes down what is on them. Its text then goes through the same keyword "
+                    "matching as every other page, so every tick still points to a page number.")
+        on = st.toggle("Read handwriting with Gemma 4", value=st.session_state.get("gemma_on", False),
+                       key="gemma_on")
+        if not on:
+            return None
+        where = st.radio("Where Gemma runs", ["Google Gemini API", "On this laptop (Ollama)"], key="gemma_where",
+                         horizontal=True)
+        backend = "api" if where == "Google Gemini API" else "local"
+        if backend == "api":
+            st.text_input("Gemini API key (free at aistudio.google.com)", type="password", key="gemma_key",
+                          help="Kept only while this app is open. Never saved to a file or to GitHub.")
+            st.caption(f"Model: {GEMMA_API_MODEL}. Only handwritten pages that Tesseract cannot read (at most a few "
+                       "per file) are sent to Google. Everything else stays on this laptop.")
+        else:
+            st.caption(f"Model: {GEMMA_LOCAL_MODEL} through Ollama. Nothing leaves this laptop. One-time setup: "
+                       f"ollama pull {GEMMA_LOCAL_MODEL}  (slow without a graphics card).")
+        if st.button("Test Gemma connection", key="gemma_test"):
+            with st.spinner("Asking Gemma..."):
+                problem = check_connection(backend, st.session_state.get("gemma_key", "").strip())
+            if problem:
+                st.error(problem)
+            else:
+                st.success("Gemma 4 is answering. Ready to read handwriting.")
+        st.caption("Answers are saved on this laptop (.gemma_cache), so sorting the same notes again is instant "
+                   "and works without internet.")
+        return backend
+
+
 def page_sort():
     header("Step 3 of 3", "Sort my", "notes.",
            "Reads every file, removes circulars and duplicates, matches notes to your syllabus, files clean copies "
@@ -569,6 +612,7 @@ def page_sort():
     read_photos = st.toggle("Read photos too", value=st.session_state.get("read_photos", True), key="read_photos",
                             help="Photos (handwritten notes, board pictures) are read with OCR, which takes a few "
                                  "seconds each. Switch off to sort only the PDFs - much faster on a big group.")
+    gemma_backend = gemma_panel()
     if not st.button("Sort my notes", type="primary", disabled=n == 0 or n_units == 0):
         if n_units == 0:
             st.caption("Add your syllabus first - go to 1 · Syllabus and upload a photo of it.")
@@ -590,8 +634,16 @@ def page_sort():
         frac = (i + (done / total if total else 1)) / len(STAGES)
         prog.progress(min(frac, 1.0), text=f"Stage {i + 1} · {name}: {msg}")
 
+    gemma = None
+    if gemma_backend:
+        try:
+            gemma = GemmaReader(gemma_backend, api_key=st.session_state.get("gemma_key", "").strip())
+        except ValueError as e:
+            st.error(str(e))
+            return
     try:
-        result = run(roots, SYLLABUS_FILE, embedder, progress=progress, log=log, read_photos=read_photos)
+        result = run(roots, SYLLABUS_FILE, embedder, progress=progress, log=log, read_photos=read_photos,
+                     gemma=gemma)
     except FileNotFoundError as e:
         st.error(str(e))
         return
@@ -648,6 +700,14 @@ def page_coverage():
                    + ", ".join(f["name"] for f in R["failed"][:8]) + (" ..." if len(R["failed"]) > 8 else ""))
     if R.get("photos_off"):
         st.info(f"{R['photos_off']} photo(s) were not read because \"Read photos too\" was switched off on the Sort page.")
+    g = R.get("gemma")
+    if g:
+        if g.get("pages"):
+            st.success(f"Gemma 4 read {g['pages']} handwritten page(s) in {g['docs']} file(s) "
+                       f"({g['name']}). Open the Cluster Inspector to see each page next to Gemma's transcript.")
+        if g.get("disabled"):
+            st.warning("Gemma 4 stopped after repeated errors, so the remaining handwritten pages used Tesseract: "
+                       + str(g.get("error", "")))
     c, units = R["counts"], R["units"]
     ready = sum(u["status"] == "READY" for u in units)
     missing = sum(u["status"] == "MISSING" for u in units)
@@ -760,6 +820,17 @@ def _ts(d):
     return t.split(",")[-1].strip() if t else "--:--"
 
 
+READER_NAMES = {"pdf": "PDF text", "tesseract": "Tesseract OCR", "gemma": "Gemma 4", "none": "-"}
+
+
+def read_by(file_name, pages):
+    """Which reader produced the text on these pages (shown next to every piece of evidence)."""
+    d = doc_by_name(file_name)
+    readers = (d or {}).get("page_readers") or []
+    names = {READER_NAMES.get(readers[p - 1], "?") for p in pages if 0 < p <= len(readers)}
+    return ", ".join(sorted(names)) or "PDF text"
+
+
 def page_inspector():
     header("", "Cluster", "Inspector.")
     if need_result():
@@ -803,9 +874,10 @@ def page_inspector():
         for stp, srcs in row["evidence"].items():
             for s in srcs:
                 ev.append({"Subtopic": stp, "File": s["file"], "Page(s)": ", ".join(map(str, s["pages"])),
+                           "Read by": read_by(s["file"], s["pages"]),
                            "From": " · ".join(x for x in (s.get("sender"), s.get("group")) if x)})
         for stp in row["missing"]:
-            ev.append({"Subtopic": stp, "File": "-", "Page(s)": "-", "From": "not found in any note"})
+            ev.append({"Subtopic": stp, "File": "-", "Page(s)": "-", "Read by": "-", "From": "not found in any note"})
         st.dataframe(ev, hide_index=True, width="stretch")
 
     with right:
@@ -825,6 +897,11 @@ def page_inspector():
             st.markdown("".join(f'<span class="tag ok">{esc(h)}</span>' for h in hits_here) or
                         '<span class="tag blue">no keyword on this page</span>', unsafe_allow_html=True)
             preview(d, sel[1] - 1, dpi=80)
+            readers = d.get("page_readers") or []
+            if sel[1] - 1 < len(readers) and readers[sel[1] - 1] == "gemma":
+                st.markdown('<span class="tag ok">handwriting read by Gemma 4</span>', unsafe_allow_html=True)
+                with st.expander("What Gemma 4 read on this page", expanded=True):
+                    st.text(d["page_texts"][sel[1] - 1][:3000])
 
     sc = ""
     if docs and docs[0].get("scores"):
